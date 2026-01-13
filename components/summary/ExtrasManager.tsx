@@ -87,15 +87,15 @@ export default function ExtrasManager() {
                 <p className="font-semibold text-stone-800">Tax</p>
               </div>
             </div>
-            <div className="relative">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-400 font-medium">$</span>
+            <div className="flex items-center gap-2">
+              <span className="text-stone-500 font-medium text-lg">$</span>
               <input
                 type="number"
                 step="0.01"
                 min="0"
                 value={meal.receiptMeta.tax || ''}
                 onChange={(e) => updateReceiptMeta({ tax: parseFloat(e.target.value) || 0 })}
-                className="input pl-8 text-lg font-semibold"
+                className="input text-lg font-semibold flex-1"
                 placeholder="0.00"
               />
             </div>
@@ -113,41 +113,18 @@ export default function ExtrasManager() {
                 <p className="font-semibold text-stone-800">Tip</p>
               </div>
             </div>
-            <div className="relative">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-400 font-medium">$</span>
+            <div className="flex items-center gap-2">
+              <span className="text-stone-500 font-medium text-lg">$</span>
               <input
                 type="number"
                 step="0.01"
                 min="0"
                 value={meal.receiptMeta.tip || ''}
                 onChange={(e) => updateReceiptMeta({ tip: parseFloat(e.target.value) || 0 })}
-                className="input pl-8 text-lg font-semibold"
+                className="input text-lg font-semibold flex-1"
                 placeholder="0.00"
               />
             </div>
-            {/* Quick tip buttons */}
-            {itemsSubtotal > 0 && (
-              <div className="flex gap-2 mt-3">
-                {[15, 18, 20, 25].map((pct) => {
-                  const tipAmount = Math.round(itemsSubtotal * pct) / 100;
-                  const isSelected = Math.abs(meal.receiptMeta.tip - tipAmount) < 0.01;
-                  return (
-                    <button
-                      key={pct}
-                      type="button"
-                      onClick={() => updateReceiptMeta({ tip: tipAmount })}
-                      className={`flex-1 py-2 px-3 rounded-xl text-sm font-medium transition-all ${
-                        isSelected
-                          ? 'bg-green-500 text-white shadow-md'
-                          : 'bg-white border border-stone-200 text-stone-600 hover:bg-green-50 hover:border-green-200'
-                      }`}
-                    >
-                      {pct}%
-                    </button>
-                  );
-                })}
-              </div>
-            )}
           </div>
 
           {/* Total */}
@@ -165,15 +142,15 @@ export default function ExtrasManager() {
                 </div>
               </div>
             </div>
-            <div className="relative">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-400 font-medium">$</span>
+            <div className="flex items-center gap-2">
+              <span className="text-stone-500 font-medium text-lg">$</span>
               <input
                 type="number"
                 step="0.01"
                 min="0"
                 value={meal.receiptMeta.total || ''}
                 onChange={(e) => updateReceiptMeta({ total: parseFloat(e.target.value) || 0 })}
-                className="input pl-8 text-lg font-semibold"
+                className="input text-lg font-semibold flex-1"
                 placeholder="0.00"
               />
             </div>
