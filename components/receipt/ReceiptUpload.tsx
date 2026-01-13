@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { useMeal } from '@/lib/store/meal-store';
 import { OCRResult } from '@/lib/types/meal';
 import { OCRStatus } from '@/lib/hooks/useClientOCR';
+import ImagePreprocessor from './ImagePreprocessor';
 
 interface OCRHook {
   status: OCRStatus;
@@ -12,6 +13,7 @@ interface OCRHook {
   error: string | null;
   preload: () => Promise<void>;
   processImage: (file: File) => Promise<OCRResult | null>;
+  processImageFromDataUrl: (dataUrl: string) => Promise<OCRResult | null>;
   isReady: boolean;
 }
 
@@ -20,30 +22,72 @@ interface ReceiptUploadProps {
   ocr: OCRHook;
 }
 
+type UploadStep = 'upload' | 'preprocess' | 'processing';
+
 export default function ReceiptUpload({ onParseSuccess, ocr }: ReceiptUploadProps) {
   const { meal } = useMeal();
+  const [step, setStep] = useState<UploadStep>('upload');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const isProcessing = ocr.status === 'processing';
+  const isProcessing = ocr.status === 'processing' || step === 'processing';
   const isInitializing = ocr.status === 'initializing';
   const error = localError || ocr.error;
 
-  const handleFileSelect = async (file: File) => {
+  // Handle initial file selection - show preprocessor
+  const handleFileSelect = useCallback((file: File) => {
     if (!file.type.startsWith('image/')) {
       setLocalError('Please upload an image file (JPG, PNG, HEIC, etc.)');
       return;
     }
 
     setLocalError(null);
+    setSelectedFile(file);
+    setStep('preprocess');
+  }, []);
 
-    const result = await ocr.processImage(file);
-    
-    if (result) {
-      onParseSuccess(result);
+  // Handle preprocessor completion - run OCR on processed image
+  const handlePreprocessComplete = useCallback(async (processedImageDataUrl: string) => {
+    setStep('processing');
+    setLocalError(null);
+
+    try {
+      // Use the new processImageFromDataUrl if available, otherwise convert to blob
+      let result: OCRResult | null = null;
+      
+      if (ocr.processImageFromDataUrl) {
+        result = await ocr.processImageFromDataUrl(processedImageDataUrl);
+      } else {
+        // Fallback: convert data URL to File
+        const response = await fetch(processedImageDataUrl);
+        const blob = await response.blob();
+        const file = new File([blob], 'processed-receipt.png', { type: 'image/png' });
+        result = await ocr.processImage(file);
+      }
+
+      if (result) {
+        onParseSuccess(result);
+      } else {
+        setStep('upload');
+      }
+    } catch (err) {
+      console.error('OCR processing failed:', err);
+      setLocalError('Failed to process image. Please try again.');
+      setStep('upload');
     }
-  };
+  }, [ocr, onParseSuccess]);
+
+  // Cancel preprocessing and go back to upload
+  const handlePreprocessCancel = useCallback(() => {
+    setSelectedFile(null);
+    setStep('upload');
+    // Reset the file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  }, []);
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -68,6 +112,17 @@ export default function ReceiptUpload({ onParseSuccess, ocr }: ReceiptUploadProp
 
   if (!meal) return null;
 
+  // Show preprocessor if a file is selected and we're in preprocess step
+  if (step === 'preprocess' && selectedFile) {
+    return (
+      <ImagePreprocessor
+        imageFile={selectedFile}
+        onComplete={handlePreprocessComplete}
+        onCancel={handlePreprocessCancel}
+      />
+    );
+  }
+
   return (
     <div className="card p-6">
       <div className="flex items-center gap-4 mb-6">
@@ -78,7 +133,7 @@ export default function ReceiptUpload({ onParseSuccess, ocr }: ReceiptUploadProp
         </div>
         <div>
           <h2 className="text-xl font-bold text-stone-800">Upload Receipt</h2>
-          <p className="text-sm text-stone-500">We'll extract items automatically</p>
+          <p className="text-sm text-stone-500">We'll help you crop and enhance it</p>
         </div>
       </div>
 
@@ -189,11 +244,11 @@ export default function ReceiptUpload({ onParseSuccess, ocr }: ReceiptUploadProp
             </svg>
           </div>
           <div>
-            <p className="text-sm font-semibold text-secondary-800 mb-1">Tips for best results</p>
+            <p className="text-sm font-semibold text-secondary-800 mb-1">New: Smart cropping</p>
             <ul className="text-sm text-secondary-700 space-y-1">
-              <li>• Good lighting, no shadows</li>
-              <li>• Flat, no angles</li>
-              <li>• Clear, in-focus text</li>
+              <li>• Upload any photo of a receipt</li>
+              <li>• Drag corners to crop precisely</li>
+              <li>• Auto-enhance for better parsing</li>
             </ul>
           </div>
         </div>

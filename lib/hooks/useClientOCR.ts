@@ -92,6 +92,7 @@ interface UseClientOCRReturn {
   error: string | null;
   preload: () => Promise<void>;
   processImage: (file: File) => Promise<OCRResult | null>;
+  processImageFromDataUrl: (dataUrl: string) => Promise<OCRResult | null>;
   isReady: boolean;
 }
 
@@ -167,6 +168,57 @@ export function useClientOCR(): UseClientOCRReturn {
     await initializeWorker();
   }, [initializeWorker]);
 
+  // Core OCR processing logic - used by both processImage and processImageFromDataUrl
+  const runOCR = useCallback(async (imageData: string): Promise<OCRResult | null> => {
+    if (!workerRef.current) {
+      throw new Error('OCR engine not available');
+    }
+
+    setProgress(30);
+    setProgressMessage('Reading text...');
+
+    const result = await workerRef.current.recognize(imageData);
+    
+    setProgress(70);
+    setProgressMessage('Extracting items...');
+
+    const ocrText = result.data.text;
+    const ocrConfidence = result.data.confidence / 100;
+
+    // Log for debugging
+    console.log('OCR Raw Text:', ocrText);
+    console.log('OCR Confidence:', ocrConfidence);
+
+    // Check confidence
+    if (!isConfidenceAcceptable(ocrConfidence)) {
+      setStatus('ready');
+      setError(`Receipt quality too low (${Math.round(ocrConfidence * 100)}% confidence). Try a clearer, well-lit photo.`);
+      return null;
+    }
+
+    // Parse the text
+    const parseResult = parseReceiptText(ocrText, ocrConfidence);
+    
+    console.log('Parsed items:', parseResult.items);
+    console.log('Parsed meta:', parseResult.receiptMeta);
+
+    // Must have at least some items to be useful
+    if (parseResult.items.length === 0) {
+      setStatus('ready');
+      // Show what we did find to help debug
+      const total = parseResult.receiptMeta.total ?? 0;
+      const foundTotal = total > 0 ? ` (Found total: $${total.toFixed(2)})` : '';
+      setError(`Could not extract line items from receipt.${foundTotal} Try a clearer photo or use manual entry.`);
+      return null;
+    }
+
+    setStatus('ready');
+    setProgress(100);
+    setProgressMessage('Done!');
+
+    return parseResult;
+  }, []);
+
   const processImage = useCallback(async (file: File): Promise<OCRResult | null> => {
     try {
       // Ensure worker is initialized
@@ -195,55 +247,38 @@ export function useClientOCR(): UseClientOCRReturn {
         });
       }
 
-      setProgress(30);
-      setProgressMessage('Reading text...');
-
-      const result = await workerRef.current.recognize(processedImage);
-      
-      setProgress(70);
-      setProgressMessage('Extracting items...');
-
-      const ocrText = result.data.text;
-      const ocrConfidence = result.data.confidence / 100;
-
-      // Log for debugging
-      console.log('OCR Raw Text:', ocrText);
-      console.log('OCR Confidence:', ocrConfidence);
-
-      // Check confidence
-      if (!isConfidenceAcceptable(ocrConfidence)) {
-        setStatus('ready');
-        setError(`Receipt quality too low (${Math.round(ocrConfidence * 100)}% confidence). Try a clearer, well-lit photo.`);
-        return null;
-      }
-
-      // Parse the text
-      const parseResult = parseReceiptText(ocrText, ocrConfidence);
-      
-      console.log('Parsed items:', parseResult.items);
-      console.log('Parsed meta:', parseResult.receiptMeta);
-
-      // Must have at least some items to be useful
-      if (parseResult.items.length === 0) {
-        setStatus('ready');
-        // Show what we did find to help debug
-        const total = parseResult.receiptMeta.total ?? 0;
-        const foundTotal = total > 0 ? ` (Found total: $${total.toFixed(2)})` : '';
-        setError(`Could not extract line items from receipt.${foundTotal} Try a clearer photo or use manual entry.`);
-        return null;
-      }
-
-      setStatus('ready');
-      setProgress(100);
-      setProgressMessage('Done!');
-
-      return parseResult;
+      return await runOCR(processedImage);
     } catch (err) {
       setStatus('ready');
       setError(err instanceof Error ? err.message : 'Failed to process image');
       return null;
     }
-  }, [initializeWorker]);
+  }, [initializeWorker, runOCR]);
+
+  // Process an already-preprocessed image from a data URL
+  // Used when the image has already been cropped/enhanced by ImagePreprocessor
+  const processImageFromDataUrl = useCallback(async (dataUrl: string): Promise<OCRResult | null> => {
+    try {
+      // Ensure worker is initialized
+      await initializeWorker();
+
+      if (!workerRef.current) {
+        throw new Error('OCR engine not available');
+      }
+
+      setStatus('processing');
+      setProgress(0);
+      setProgressMessage('Processing enhanced image...');
+      setError(null);
+
+      // Image is already preprocessed, so pass directly to OCR
+      return await runOCR(dataUrl);
+    } catch (err) {
+      setStatus('ready');
+      setError(err instanceof Error ? err.message : 'Failed to process image');
+      return null;
+    }
+  }, [initializeWorker, runOCR]);
 
   return {
     status,
@@ -252,6 +287,7 @@ export function useClientOCR(): UseClientOCRReturn {
     error,
     preload,
     processImage,
+    processImageFromDataUrl,
     isReady: status === 'ready',
   };
 }
