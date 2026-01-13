@@ -335,6 +335,10 @@ body {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  /* Fix for character rendering issues */
+  display: inline-block;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
 }
 
 /* Checkbox styling */

@@ -302,7 +302,7 @@ export default function ItemsReview() {
       <div className="mt-6 pt-5 border-t border-stone-100">
         <div className="flex justify-between items-center">
           <span className="text-stone-600 font-medium">Items Total</span>
-          <span className="text-3xl font-bold gradient-text">
+          <span className="text-3xl font-bold text-primary-600">
             ${meal.items.reduce((sum, item) => sum + item.amount, 0).toFixed(2)}
           </span>
         </div>
