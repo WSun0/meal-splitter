@@ -4,6 +4,9 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Will's Meal Splitting Tool",
   description: "Calculate how much each diner owes for a shared meal",
+  icons: {
+    icon: '/favicon.ico',
+  },
 };
 
 export default function RootLayout({
