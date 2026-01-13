@@ -12,7 +12,7 @@ interface ImagePreprocessorProps {
   onCancel: () => void;
 }
 
-const HANDLE_RADIUS = 16;
+const HANDLE_RADIUS = 10;
 const HANDLE_TOUCH_RADIUS = 24;
 
 export default function ImagePreprocessor({
@@ -158,7 +158,7 @@ export default function ImagePreprocessor({
 
       // Inner circle
       ctx.beginPath();
-      ctx.arc(point.x, point.y, HANDLE_RADIUS - 6, 0, Math.PI * 2);
+      ctx.arc(point.x, point.y, HANDLE_RADIUS - 4, 0, Math.PI * 2);
       ctx.fillStyle = '#10b981';
       ctx.fill();
     });
@@ -368,7 +368,7 @@ export default function ImagePreprocessor({
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 <p className="text-xs text-stone-600">
-                  <span className="font-medium">Tip:</span> Slide right if text looks faint or broken. Slide left if there's too much black noise or speckles.
+                  <span className="font-medium">Tip:</span> The default of 10 works well for most receipts. Slide right if text looks faint or broken. Slide left if there's too much black noise or speckles.
                 </p>
               </div>
             </div>
