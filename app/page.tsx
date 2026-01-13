@@ -8,20 +8,20 @@ import ReceiptUpload from '@/components/receipt/ReceiptUpload';
 import ManualEntry from '@/components/receipt/ManualEntry';
 import ItemsReview from '@/components/receipt/ItemsReview';
 import ItemAssignment from '@/components/assignment/ItemAssignment';
-import AdjustmentsManager from '@/components/summary/AdjustmentsManager';
+import ExtrasManager from '@/components/summary/ExtrasManager';
 import MealSummary from '@/components/summary/MealSummary';
 import ExportShare from '@/components/summary/ExportShare';
 import { OCRResult } from '@/lib/types/meal';
 import { useClientOCR } from '@/lib/hooks/useClientOCR';
 
-type Step = 'diners' | 'receipt' | 'items' | 'assign' | 'adjustments' | 'summary';
+type Step = 'diners' | 'receipt' | 'items' | 'assign' | 'extras' | 'summary';
 
 const steps: { id: Step; label: string }[] = [
   { id: 'receipt', label: 'Receipt' },
   { id: 'items', label: 'Items' },
   { id: 'diners', label: 'Diners' },
   { id: 'assign', label: 'Assign' },
-  { id: 'adjustments', label: 'Adjust' },
+  { id: 'extras', label: 'Tax & Tip' },
   { id: 'summary', label: 'Summary' },
 ];
 
@@ -266,8 +266,8 @@ function MealSplitApp() {
                 <ItemAssignment />
                 {hasAssignments && (
                   <div className="text-center">
-                    <button onClick={() => setCurrentStep('adjustments')} className="btn-primary text-base py-3 px-8">
-                      Continue to Adjustments
+                    <button onClick={() => setCurrentStep('extras')} className="btn-primary text-base py-3 px-8">
+                      Continue to Tax & Tip
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                       </svg>
@@ -277,11 +277,11 @@ function MealSplitApp() {
               </>
             )}
 
-            {currentStep === 'adjustments' && (
+            {currentStep === 'extras' && (
               <>
-                <AdjustmentsManager />
+                <ExtrasManager />
                 <div className="text-center">
-                  <button onClick={() => setCurrentStep('summary')} className="btn-secondary text-base py-3 px-8">
+                  <button onClick={() => setCurrentStep('summary')} className="btn-primary text-base py-3 px-8">
                     View Final Summary
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
