@@ -132,15 +132,15 @@ export default function ItemsReview() {
                 />
               </div>
               <div className="col-span-8 sm:col-span-4">
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400">$</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-stone-400">$</span>
                   <input
                     type="number"
                     step="0.01"
                     min="0"
                     value={newItemForm.amount || ''}
                     onChange={(e) => setNewItemForm({ ...newItemForm, amount: parseFloat(e.target.value) || 0 })}
-                    className="input pl-7"
+                    className="input flex-1"
                     placeholder="0.00"
                   />
                 </div>
@@ -196,9 +196,9 @@ export default function ItemsReview() {
                     <input type="number" min="1" value={editForm.quantity || 1} onChange={(e) => setEditForm({ ...editForm, quantity: parseInt(e.target.value, 10) })} className="input text-center" />
                   </div>
                   <div className="col-span-8 sm:col-span-4">
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400">$</span>
-                      <input type="number" step="0.01" min="0" value={editForm.amount || 0} onChange={(e) => setEditForm({ ...editForm, amount: parseFloat(e.target.value) })} className="input pl-7" />
+                    <div className="flex items-center gap-2">
+                      <span className="text-stone-400">$</span>
+                      <input type="number" step="0.01" min="0" value={editForm.amount || 0} onChange={(e) => setEditForm({ ...editForm, amount: parseFloat(e.target.value) })} className="input flex-1" />
                     </div>
                   </div>
                 </div>
@@ -260,15 +260,15 @@ export default function ItemsReview() {
                   />
                 </div>
                 <div className="col-span-8 sm:col-span-4">
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400">$</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-stone-400">$</span>
                     <input
                       type="number"
                       step="0.01"
                       min="0"
                       value={newItemForm.amount || ''}
                       onChange={(e) => setNewItemForm({ ...newItemForm, amount: parseFloat(e.target.value) || 0 })}
-                      className="input pl-7"
+                      className="input flex-1"
                       placeholder="0.00"
                     />
                   </div>
