@@ -23,7 +23,7 @@ export default function Landing({ onSelectMode }: LandingProps) {
             Will's Meal Splitting Tool
           </h1>
           <p className="text-xl text-stone-500 max-w-md mx-auto leading-relaxed">
-            Split the bill fairly, without the awkward math
+            Seamlessly split a bill without doing any awkward math!
           </p>
         </div>
 

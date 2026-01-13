@@ -3,55 +3,45 @@
 import { useState, useRef } from 'react';
 import { useMeal } from '@/lib/store/meal-store';
 import { OCRResult } from '@/lib/types/meal';
+import { OCRStatus } from '@/lib/hooks/useClientOCR';
+
+interface OCRHook {
+  status: OCRStatus;
+  progress: number;
+  progressMessage: string;
+  error: string | null;
+  preload: () => Promise<void>;
+  processImage: (file: File) => Promise<OCRResult | null>;
+  isReady: boolean;
+}
 
 interface ReceiptUploadProps {
   onParseSuccess: (result: OCRResult) => void;
+  ocr: OCRHook;
 }
 
-export default function ReceiptUpload({ onParseSuccess }: ReceiptUploadProps) {
+export default function ReceiptUpload({ onParseSuccess, ocr }: ReceiptUploadProps) {
   const { meal } = useMeal();
   const [isDragging, setIsDragging] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [suggestion, setSuggestion] = useState<string | null>(null);
+  const [localError, setLocalError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const isProcessing = ocr.status === 'processing';
+  const isInitializing = ocr.status === 'initializing';
+  const error = localError || ocr.error;
 
   const handleFileSelect = async (file: File) => {
     if (!file.type.startsWith('image/')) {
-      setError('Please upload an image file (JPG, PNG, HEIC, etc.)');
+      setLocalError('Please upload an image file (JPG, PNG, HEIC, etc.)');
       return;
     }
 
-    setError(null);
-    setSuggestion(null);
-    setIsProcessing(true);
+    setLocalError(null);
 
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-
-      const response = await fetch('/api/ocr', {
-        method: 'POST',
-        body: formData,
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        setError(result.error || 'Failed to process receipt');
-        if (result.suggestion) {
-          setSuggestion(result.suggestion);
-        }
-        return;
-      }
-
-      if (result.success && result.data) {
-        onParseSuccess(result.data);
-      }
-    } catch (err) {
-      setError('Network error. Please try again.');
-    } finally {
-      setIsProcessing(false);
+    const result = await ocr.processImage(file);
+    
+    if (result) {
+      onParseSuccess(result);
     }
   };
 
@@ -92,57 +82,88 @@ export default function ReceiptUpload({ onParseSuccess }: ReceiptUploadProps) {
         </div>
       </div>
 
-      <div
-        onDrop={handleDrop}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onClick={handleClick}
-        className={`
-          relative rounded-2xl p-10 text-center cursor-pointer transition-all duration-300
-          ${isDragging 
-            ? 'bg-gradient-to-br from-primary-50 to-primary-100 border-2 border-primary-400 scale-[1.02]' 
-            : 'bg-stone-50 border-2 border-dashed border-stone-200 hover:border-primary-300 hover:bg-primary-50/30'
-          }
-          ${isProcessing ? 'opacity-60 cursor-wait pointer-events-none' : ''}
-        `}
-      >
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          onChange={handleFileInputChange}
-          className="hidden"
-          disabled={isProcessing}
-        />
-
-        {isProcessing ? (
+      {/* Initializing state - shown while OCR engine loads */}
+      {isInitializing && (
+        <div className="rounded-2xl p-8 text-center bg-gradient-to-br from-primary-50 to-primary-100 border-2 border-primary-200">
           <div className="space-y-4">
             <div className="relative w-16 h-16 mx-auto">
-              <div className="absolute inset-0 rounded-full border-4 border-stone-200"></div>
+              <div className="absolute inset-0 rounded-full border-4 border-primary-200"></div>
               <div className="absolute inset-0 rounded-full border-4 border-primary-500 border-t-transparent animate-spin"></div>
             </div>
             <div>
-              <p className="font-semibold text-stone-700">Processing receipt...</p>
-              <p className="text-sm text-stone-500 mt-1">This may take a moment</p>
+              <p className="font-semibold text-primary-700">{ocr.progressMessage || 'Preparing scanner...'}</p>
+              <p className="text-sm text-primary-600 mt-1">One-time setup, please wait</p>
+              <div className="mt-3 w-48 mx-auto bg-primary-200 rounded-full h-2 overflow-hidden">
+                <div 
+                  className="h-full bg-primary-500 transition-all duration-300 ease-out"
+                  style={{ width: `${ocr.progress}%` }}
+                />
+              </div>
             </div>
           </div>
-        ) : (
-          <div className="space-y-4">
-            <div className="w-20 h-20 rounded-2xl bg-white border border-stone-200 flex items-center justify-center mx-auto shadow-sm">
-              <svg className="w-10 h-10 text-stone-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
-                <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
+        </div>
+      )}
+
+      {/* Main upload area - shown when ready or idle */}
+      {!isInitializing && (
+        <div
+          onDrop={handleDrop}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onClick={handleClick}
+          className={`
+            relative rounded-2xl p-10 text-center cursor-pointer transition-all duration-300
+            ${isDragging 
+              ? 'bg-gradient-to-br from-primary-50 to-primary-100 border-2 border-primary-400 scale-[1.02]' 
+              : 'bg-stone-50 border-2 border-dashed border-stone-200 hover:border-primary-300 hover:bg-primary-50/30'
+            }
+            ${isProcessing ? 'opacity-60 cursor-wait pointer-events-none' : ''}
+          `}
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleFileInputChange}
+            className="hidden"
+            disabled={isProcessing}
+          />
+
+          {isProcessing ? (
+            <div className="space-y-4">
+              <div className="relative w-16 h-16 mx-auto">
+                <div className="absolute inset-0 rounded-full border-4 border-stone-200"></div>
+                <div className="absolute inset-0 rounded-full border-4 border-primary-500 border-t-transparent animate-spin"></div>
+              </div>
+              <div>
+                <p className="font-semibold text-stone-700">{ocr.progressMessage || 'Processing receipt...'}</p>
+                <p className="text-sm text-stone-500 mt-1">Analyzing your receipt</p>
+                <div className="mt-3 w-48 mx-auto bg-stone-200 rounded-full h-2 overflow-hidden">
+                  <div 
+                    className="h-full bg-primary-500 transition-all duration-300 ease-out"
+                    style={{ width: `${ocr.progress}%` }}
+                  />
+                </div>
+              </div>
             </div>
-            <div>
-              <p className="text-stone-600">
-                <span className="font-semibold text-primary-600">Click to upload</span>
-                <span className="text-stone-500"> or drag and drop</span>
-              </p>
-              <p className="text-sm text-stone-400 mt-2">JPG, PNG, or HEIC (max 10MB)</p>
+          ) : (
+            <div className="space-y-4">
+              <div className="w-20 h-20 rounded-2xl bg-white border border-stone-200 flex items-center justify-center mx-auto shadow-sm">
+                <svg className="w-10 h-10 text-stone-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                  <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-stone-600">
+                  <span className="font-semibold text-primary-600">Click to upload</span>
+                  <span className="text-stone-500"> or drag and drop</span>
+                </p>
+                <p className="text-sm text-stone-400 mt-2">JPG, PNG, or HEIC (max 10MB)</p>
+              </div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
 
       {error && (
         <div className="mt-5 p-4 bg-red-50 border border-red-100 rounded-2xl">
@@ -154,7 +175,7 @@ export default function ReceiptUpload({ onParseSuccess }: ReceiptUploadProps) {
             </div>
             <div>
               <p className="text-red-800 font-medium">{error}</p>
-              {suggestion && <p className="text-red-600 text-sm mt-1">{suggestion}</p>}
+              <p className="text-red-600 text-sm mt-1">Try a clearer photo or use manual entry.</p>
             </div>
           </div>
         </div>

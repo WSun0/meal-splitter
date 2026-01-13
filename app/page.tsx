@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { MealProvider, useMeal } from '@/lib/store/meal-store';
 import Landing from '@/components/Landing';
 import DinersManagement from '@/components/meal/DinersManagement';
@@ -12,6 +12,7 @@ import AdjustmentsManager from '@/components/summary/AdjustmentsManager';
 import MealSummary from '@/components/summary/MealSummary';
 import ExportShare from '@/components/summary/ExportShare';
 import { OCRResult } from '@/lib/types/meal';
+import { useClientOCR } from '@/lib/hooks/useClientOCR';
 
 type Step = 'diners' | 'receipt' | 'items' | 'assign' | 'adjustments' | 'summary';
 
@@ -28,12 +29,27 @@ function MealSplitApp() {
   const { meal, resetMeal, createMeal, addItem, updateReceiptMeta } = useMeal();
   const [currentStep, setCurrentStep] = useState<Step>('receipt');
   const [receiptMode, setReceiptMode] = useState<'upload' | 'manual'>('upload');
+  
+  // Client-side OCR hook
+  const ocr = useClientOCR();
 
   const handleModeSelection = (mode: 'upload' | 'manual') => {
     createMeal('New Meal', undefined, new Date().toISOString().split('T')[0]);
     setReceiptMode(mode);
     setCurrentStep('receipt');
+    
+    // Preload OCR engine when user selects upload mode
+    if (mode === 'upload') {
+      ocr.preload();
+    }
   };
+  
+  // Also preload when switching to upload mode from manual
+  useEffect(() => {
+    if (receiptMode === 'upload' && meal) {
+      ocr.preload();
+    }
+  }, [receiptMode, meal]);
 
   const handleOCRSuccess = (result: OCRResult) => {
     result.items.forEach((item) => {
@@ -182,7 +198,10 @@ function MealSplitApp() {
                 </div>
 
                 {receiptMode === 'upload' ? (
-                  <ReceiptUpload onParseSuccess={handleOCRSuccess} />
+                  <ReceiptUpload 
+                    onParseSuccess={handleOCRSuccess}
+                    ocr={ocr}
+                  />
                 ) : (
                   <ManualEntry />
                 )}
