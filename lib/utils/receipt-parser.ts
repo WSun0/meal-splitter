@@ -11,7 +11,7 @@ function cleanOCRText(text: string): string {
     .replace(/[lI](\d)/g, '1$1')  // l or I before digit -> 1
     .replace(/(\d)[lI]/g, '$11')  // l or I after digit -> 1
     .replace(/(\d),(\d{2})(?!\d)/g, '$1.$2')  // comma as decimal -> period
-    .replace(/\s+/g, ' ')  // normalize whitespace
+    .replace(/[^\S\n]+/g, ' ')  // normalize whitespace BUT preserve newlines
     .trim();
 }
 
