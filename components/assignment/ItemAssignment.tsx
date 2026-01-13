@@ -161,7 +161,7 @@ export default function ItemAssignment() {
                           {isAssigned && assignment && (
                             <div className="mt-4 ml-12 pl-4 border-l-2 border-primary-200">
                               <div className="flex flex-wrap gap-2">
-                                {(['single', 'even', 'shares', 'percentage'] as const).map((type) => (
+                                {(['single', 'even', 'shares'] as const).map((type) => (
                                   <button
                                     key={type}
                                     onClick={() => updateSplitType(item.id, diner.id, type)}
@@ -171,20 +171,20 @@ export default function ItemAssignment() {
                                         : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
                                     }`}
                                   >
-                                    {type === 'single' ? 'Full' : type === 'even' ? 'Even' : type === 'shares' ? 'Shares' : '%'}
+                                    {type === 'single' ? 'Full' : type === 'even' ? 'Even' : 'Shares'}
                                   </button>
                                 ))}
                               </div>
 
-                              {(assignment.splitType === 'shares' || assignment.splitType === 'percentage') && (
+                              {assignment.splitType === 'shares' && (
                                 <div className="mt-3">
                                   <input
                                     type="number"
                                     min="0"
-                                    step={assignment.splitType === 'percentage' ? '1' : '0.1'}
+                                    step="0.1"
                                     value={assignment.value || ''}
                                     onChange={(e) => updateSplitValue(item.id, diner.id, parseFloat(e.target.value) || 0)}
-                                    placeholder={assignment.splitType === 'shares' ? 'Shares' : 'Percentage'}
+                                    placeholder="Shares"
                                     className="input w-full max-w-[180px]"
                                   />
                                 </div>
