@@ -27,7 +27,8 @@ A comprehensive web application that calculates how much each diner owes for a s
   - Contrast enhancement
   - Noise reduction
   - Sharpening and binarization
-- **OCR Integration**: Tesseract.js for receipt text extraction
+- **OCR Integration**: Google Cloud Vision API for high-accuracy receipt text extraction
+- **Rate Limiting**: Built-in usage tracking to stay within free tier (950 scans/month)
 - **Receipt Parsing**: Heuristic-based parser for extracting items and totals
 - **Rounding Reconciliation**: Ensures individual totals sum exactly to receipt total
 - **localStorage Persistence**: Automatic saving of meal data
@@ -38,6 +39,7 @@ A comprehensive web application that calculates how much each diner owes for a s
 
 ### Prerequisites
 - Node.js 18+ and npm
+- Google Cloud account (free tier available)
 
 ### Setup
 ```bash
@@ -47,6 +49,12 @@ cd meal-splitter
 
 # Install dependencies
 npm install
+
+# Copy environment template
+cp .env.example .env.local
+
+# Add your Google Cloud Vision API key to .env.local
+# (see Google Cloud Setup below)
 
 # Run development server
 npm run dev
@@ -59,6 +67,27 @@ npm start
 ```
 
 The application will be available at `http://localhost:3000`.
+
+### Google Cloud Setup (for OCR)
+
+The app uses Google Cloud Vision API for receipt scanning. The free tier includes **1,000 scans per month** (the app limits to 950 to provide a buffer).
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com)
+2. Create a new project (or select an existing one)
+3. Enable the **Cloud Vision API**:
+   - Navigate to "APIs & Services" > "Library"
+   - Search for "Cloud Vision API"
+   - Click "Enable"
+4. Create an API key:
+   - Go to "APIs & Services" > "Credentials"
+   - Click "Create Credentials" > "API Key"
+   - (Optional) Restrict the key to "Cloud Vision API" only
+5. Add the key to your `.env.local` file:
+   ```
+   GOOGLE_CLOUD_VISION_API_KEY=your_api_key_here
+   ```
+
+**Note:** The app tracks usage in your browser's localStorage and shows remaining scans. If you hit the limit, use manual entry until the next month.
 
 ## User Guide
 
@@ -149,7 +178,7 @@ meal-splitter/
 - **Next.js 16**: React framework with App Router
 - **TypeScript**: Type-safe development
 - **Tailwind CSS**: Utility-first styling
-- **Tesseract.js**: Client-side OCR
+- **Google Cloud Vision**: High-accuracy OCR (1,000 free/month)
 - **Sharp**: Server-side image processing
 - **React Context**: State management
 

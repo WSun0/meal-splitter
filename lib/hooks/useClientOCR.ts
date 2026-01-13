@@ -1,89 +1,17 @@
 'use client';
 
-import { useState, useRef, useCallback, useEffect } from 'react';
-import { createWorker, Worker, PSM } from 'tesseract.js';
-import { parseReceiptText, isConfidenceAcceptable } from '@/lib/utils/receipt-parser';
+import { useState, useCallback } from 'react';
 import { OCRResult } from '@/lib/types/meal';
+import { 
+  canUseOCR, 
+  incrementUsage, 
+  getUsageStats, 
+  getUsageMessage,
+  UsageStats,
+  setServerRateLimited,
+} from '@/lib/utils/rate-limiter';
 
 export type OCRStatus = 'idle' | 'initializing' | 'ready' | 'processing' | 'error';
-
-/**
- * Preprocess image using Canvas for better OCR results
- * Applies: grayscale, contrast enhancement, and thresholding
- */
-async function preprocessImage(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      // Create canvas
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        reject(new Error('Could not get canvas context'));
-        return;
-      }
-
-      // Limit size for performance (max 2000px on longest side)
-      const maxDim = 2000;
-      let width = img.width;
-      let height = img.height;
-      if (width > maxDim || height > maxDim) {
-        if (width > height) {
-          height = (height / width) * maxDim;
-          width = maxDim;
-        } else {
-          width = (width / height) * maxDim;
-          height = maxDim;
-        }
-      }
-
-      canvas.width = width;
-      canvas.height = height;
-
-      // Draw image
-      ctx.drawImage(img, 0, 0, width, height);
-
-      // Get image data for pixel manipulation
-      const imageData = ctx.getImageData(0, 0, width, height);
-      const data = imageData.data;
-
-      // Convert to grayscale and enhance contrast
-      for (let i = 0; i < data.length; i += 4) {
-        // Grayscale using luminance formula
-        const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
-        
-        // Enhance contrast (multiply deviation from middle by 1.5)
-        let enhanced = 128 + (gray - 128) * 1.5;
-        enhanced = Math.max(0, Math.min(255, enhanced));
-        
-        // Apply threshold for binarization (makes text darker, background lighter)
-        const threshold = 140;
-        const final = enhanced < threshold ? 0 : 255;
-        
-        data[i] = final;     // R
-        data[i + 1] = final; // G
-        data[i + 2] = final; // B
-        // Alpha stays the same
-      }
-
-      // Put processed image back
-      ctx.putImageData(imageData, 0, 0);
-
-      // Return as data URL
-      resolve(canvas.toDataURL('image/png'));
-    };
-
-    img.onerror = () => reject(new Error('Failed to load image'));
-
-    // Load image from file
-    const reader = new FileReader();
-    reader.onload = () => {
-      img.src = reader.result as string;
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
 
 interface UseClientOCRReturn {
   status: OCRStatus;
@@ -94,191 +22,152 @@ interface UseClientOCRReturn {
   processImage: (file: File) => Promise<OCRResult | null>;
   processImageFromDataUrl: (dataUrl: string) => Promise<OCRResult | null>;
   isReady: boolean;
+  usageStats: UsageStats;
+  usageMessage: string;
 }
 
 export function useClientOCR(): UseClientOCRReturn {
-  const [status, setStatus] = useState<OCRStatus>('idle');
+  const [status, setStatus] = useState<OCRStatus>('ready'); // No initialization needed for server API
   const [progress, setProgress] = useState(0);
   const [progressMessage, setProgressMessage] = useState('');
   const [error, setError] = useState<string | null>(null);
-  
-  const workerRef = useRef<Worker | null>(null);
-  const initPromiseRef = useRef<Promise<void> | null>(null);
+  const [usageStats, setUsageStats] = useState<UsageStats>(getUsageStats());
 
-  // Clean up worker on unmount
-  useEffect(() => {
-    return () => {
-      if (workerRef.current) {
-        workerRef.current.terminate();
-        workerRef.current = null;
-      }
-    };
+  // Refresh usage stats
+  const refreshUsageStats = useCallback(() => {
+    setUsageStats(getUsageStats());
   }, []);
 
-  const initializeWorker = useCallback(async () => {
-    // If already initialized or initializing, return existing promise
-    if (workerRef.current) return;
-    if (initPromiseRef.current) return initPromiseRef.current;
-
-    initPromiseRef.current = (async () => {
-      try {
-        setStatus('initializing');
-        setProgress(0);
-        setProgressMessage('Loading OCR engine...');
-        setError(null);
-
-        const worker = await createWorker('eng', 1, {
-          logger: (m) => {
-            if (m.status === 'loading tesseract core') {
-              setProgress(10);
-              setProgressMessage('Loading OCR core...');
-            } else if (m.status === 'initializing tesseract') {
-              setProgress(20);
-              setProgressMessage('Initializing...');
-            } else if (m.status === 'loading language traineddata') {
-              setProgress(40);
-              setProgressMessage('Loading language data...');
-            } else if (m.status === 'initializing api') {
-              setProgress(80);
-              setProgressMessage('Almost ready...');
-            }
-          },
-        });
-
-        await worker.setParameters({
-          tessedit_pageseg_mode: PSM.SINGLE_BLOCK,
-        });
-
-        workerRef.current = worker;
-        setStatus('ready');
-        setProgress(100);
-        setProgressMessage('Ready!');
-      } catch (err) {
-        setStatus('error');
-        setError('Failed to initialize OCR engine');
-        initPromiseRef.current = null;
-        throw err;
-      }
-    })();
-
-    return initPromiseRef.current;
-  }, []);
-
+  // Preload is now a no-op since we use server API
   const preload = useCallback(async () => {
-    await initializeWorker();
-  }, [initializeWorker]);
+    refreshUsageStats();
+  }, [refreshUsageStats]);
 
-  // Core OCR processing logic - used by both processImage and processImageFromDataUrl
-  const runOCR = useCallback(async (imageData: string): Promise<OCRResult | null> => {
-    if (!workerRef.current) {
-      throw new Error('OCR engine not available');
-    }
-
-    setProgress(30);
-    setProgressMessage('Reading text...');
-
-    const result = await workerRef.current.recognize(imageData);
-    
-    setProgress(70);
-    setProgressMessage('Extracting items...');
-
-    const ocrText = result.data.text;
-    const ocrConfidence = result.data.confidence / 100;
-
-    // Log for debugging
-    console.log('OCR Raw Text:', ocrText);
-    console.log('OCR Confidence:', ocrConfidence);
-
-    // Check confidence
-    if (!isConfidenceAcceptable(ocrConfidence)) {
-      setStatus('ready');
-      setError(`Receipt quality too low (${Math.round(ocrConfidence * 100)}% confidence). Try a clearer, well-lit photo.`);
+  // Core OCR processing via server API
+  const runOCR = useCallback(async (imageData: string | File): Promise<OCRResult | null> => {
+    // Check client-side rate limit first (quick fail for UX)
+    if (!canUseOCR()) {
+      setError(getUsageMessage());
       return null;
     }
 
-    // Parse the text
-    const parseResult = parseReceiptText(ocrText, ocrConfidence);
-    
-    console.log('Parsed items:', parseResult.items);
-    console.log('Parsed meta:', parseResult.receiptMeta);
+    setProgress(10);
+    setProgressMessage('Uploading image...');
 
-    // Must have at least some items to be useful
-    if (parseResult.items.length === 0) {
-      setStatus('ready');
-      // Show what we did find to help debug
-      const total = parseResult.receiptMeta.total ?? 0;
-      const foundTotal = total > 0 ? ` (Found total: $${total.toFixed(2)})` : '';
-      setError(`Could not extract line items from receipt.${foundTotal} Try a clearer photo or use manual entry.`);
+    try {
+      // Prepare form data
+      const formData = new FormData();
+      
+      if (typeof imageData === 'string') {
+        // Convert data URL to blob
+        const response = await fetch(imageData);
+        const blob = await response.blob();
+        formData.append('file', blob, 'receipt.png');
+      } else {
+        formData.append('file', imageData);
+      }
+
+      setProgress(30);
+      setProgressMessage('Analyzing receipt...');
+
+      // Call server API
+      const response = await fetch('/api/ocr', {
+        method: 'POST',
+        body: formData,
+      });
+
+      setProgress(70);
+      setProgressMessage('Extracting items...');
+
+      const result = await response.json();
+
+      // Handle rate limiting from server
+      if (response.status === 429) {
+        const retryAfter = result.retryAfter || 60;
+        setServerRateLimited(retryAfter);
+        setError(result.error || `Rate limited. Please try again in ${retryAfter} seconds.`);
+        refreshUsageStats();
+        return null;
+      }
+
+      if (!response.ok) {
+        // Handle specific error cases
+        if (response.status === 422) {
+          setError(result.error || 'Could not read receipt. Try a clearer photo or manual entry.');
+          if (result.rawText) {
+            console.log('OCR Raw Text (for debugging):', result.rawText);
+          }
+        } else if (response.status === 413) {
+          setError(result.error || 'Image too large. Please use a smaller image.');
+        } else if (response.status === 415) {
+          setError(result.error || 'Invalid file type. Please upload JPG, PNG, or WebP.');
+        } else {
+          setError(result.error || 'Failed to process receipt');
+        }
+        return null;
+      }
+
+      // Success! Increment local usage counter for UX display
+      incrementUsage();
+      refreshUsageStats();
+
+      setProgress(100);
+      setProgressMessage('Done!');
+
+      return result.data as OCRResult;
+    } catch (err) {
+      console.error('OCR API error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to process image');
       return null;
     }
-
-    setStatus('ready');
-    setProgress(100);
-    setProgressMessage('Done!');
-
-    return parseResult;
-  }, []);
+  }, [refreshUsageStats]);
 
   const processImage = useCallback(async (file: File): Promise<OCRResult | null> => {
+    // Check rate limit
+    if (!canUseOCR()) {
+      setError(getUsageMessage());
+      return null;
+    }
+
+    setStatus('processing');
+    setProgress(0);
+    setProgressMessage('Preparing image...');
+    setError(null);
+
     try {
-      // Ensure worker is initialized
-      await initializeWorker();
-
-      if (!workerRef.current) {
-        throw new Error('OCR engine not available');
-      }
-
-      setStatus('processing');
-      setProgress(0);
-      setProgressMessage('Enhancing image...');
-      setError(null);
-
-      // Preprocess image for better OCR (grayscale, contrast, threshold)
-      let processedImage: string;
-      try {
-        processedImage = await preprocessImage(file);
-      } catch {
-        // Fallback to raw image if preprocessing fails
-        processedImage = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
-      }
-
-      return await runOCR(processedImage);
+      const result = await runOCR(file);
+      setStatus('ready');
+      return result;
     } catch (err) {
       setStatus('ready');
       setError(err instanceof Error ? err.message : 'Failed to process image');
       return null;
     }
-  }, [initializeWorker, runOCR]);
+  }, [runOCR]);
 
   // Process an already-preprocessed image from a data URL
-  // Used when the image has already been cropped/enhanced by ImagePreprocessor
   const processImageFromDataUrl = useCallback(async (dataUrl: string): Promise<OCRResult | null> => {
+    // Check rate limit
+    if (!canUseOCR()) {
+      setError(getUsageMessage());
+      return null;
+    }
+
+    setStatus('processing');
+    setProgress(0);
+    setProgressMessage('Processing enhanced image...');
+    setError(null);
+
     try {
-      // Ensure worker is initialized
-      await initializeWorker();
-
-      if (!workerRef.current) {
-        throw new Error('OCR engine not available');
-      }
-
-      setStatus('processing');
-      setProgress(0);
-      setProgressMessage('Processing enhanced image...');
-      setError(null);
-
-      // Image is already preprocessed, so pass directly to OCR
-      return await runOCR(dataUrl);
+      const result = await runOCR(dataUrl);
+      setStatus('ready');
+      return result;
     } catch (err) {
       setStatus('ready');
       setError(err instanceof Error ? err.message : 'Failed to process image');
       return null;
     }
-  }, [initializeWorker, runOCR]);
+  }, [runOCR]);
 
   return {
     status,
@@ -289,5 +178,7 @@ export function useClientOCR(): UseClientOCRReturn {
     processImage,
     processImageFromDataUrl,
     isReady: status === 'ready',
+    usageStats,
+    usageMessage: getUsageMessage(),
   };
 }
