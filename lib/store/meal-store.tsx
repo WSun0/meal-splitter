@@ -67,95 +67,113 @@ export function MealProvider({ children }: { children: ReactNode }) {
   };
 
   const addDiner = (name: string) => {
-    if (!meal) return;
-    const newDiner: Diner = {
-      id: generateId(),
-      name,
-    };
-    setMeal({
-      ...meal,
-      diners: [...meal.diners, newDiner],
+    setMeal((prevMeal) => {
+      if (!prevMeal) return prevMeal;
+      const newDiner: Diner = {
+        id: generateId(),
+        name,
+      };
+      return {
+        ...prevMeal,
+        diners: [...prevMeal.diners, newDiner],
+      };
     });
   };
 
   const removeDiner = (dinerId: string) => {
-    if (!meal) return;
-    // Remove diner and their assignments from all items
-    const updatedItems = meal.items.map((item) => ({
-      ...item,
-      assignments: item.assignments.filter((a) => a.dinerId !== dinerId),
-    }));
-    setMeal({
-      ...meal,
-      diners: meal.diners.filter((d) => d.id !== dinerId),
-      items: updatedItems,
-      adjustments: meal.adjustments.filter((adj) => adj.personId !== dinerId),
+    setMeal((prevMeal) => {
+      if (!prevMeal) return prevMeal;
+      // Remove diner and their assignments from all items
+      const updatedItems = prevMeal.items.map((item) => ({
+        ...item,
+        assignments: item.assignments.filter((a) => a.dinerId !== dinerId),
+      }));
+      return {
+        ...prevMeal,
+        diners: prevMeal.diners.filter((d) => d.id !== dinerId),
+        items: updatedItems,
+        adjustments: prevMeal.adjustments.filter((adj) => adj.personId !== dinerId),
+      };
     });
   };
 
   const updateDiner = (dinerId: string, name: string) => {
-    if (!meal) return;
-    setMeal({
-      ...meal,
-      diners: meal.diners.map((d) => (d.id === dinerId ? { ...d, name } : d)),
+    setMeal((prevMeal) => {
+      if (!prevMeal) return prevMeal;
+      return {
+        ...prevMeal,
+        diners: prevMeal.diners.map((d) => (d.id === dinerId ? { ...d, name } : d)),
+      };
     });
   };
 
   const addItem = (item: Omit<Item, 'id'>) => {
-    if (!meal) return;
-    const newItem: Item = {
-      ...item,
-      id: generateId(),
-    };
-    setMeal({
-      ...meal,
-      items: [...meal.items, newItem],
+    setMeal((prevMeal) => {
+      if (!prevMeal) return prevMeal;
+      const newItem: Item = {
+        ...item,
+        id: generateId(),
+      };
+      return {
+        ...prevMeal,
+        items: [...prevMeal.items, newItem],
+      };
     });
   };
 
   const updateItem = (itemId: string, updates: Partial<Item>) => {
-    if (!meal) return;
-    setMeal({
-      ...meal,
-      items: meal.items.map((item) =>
-        item.id === itemId ? { ...item, ...updates } : item
-      ),
+    setMeal((prevMeal) => {
+      if (!prevMeal) return prevMeal;
+      return {
+        ...prevMeal,
+        items: prevMeal.items.map((item) =>
+          item.id === itemId ? { ...item, ...updates } : item
+        ),
+      };
     });
   };
 
   const removeItem = (itemId: string) => {
-    if (!meal) return;
-    setMeal({
-      ...meal,
-      items: meal.items.filter((item) => item.id !== itemId),
+    setMeal((prevMeal) => {
+      if (!prevMeal) return prevMeal;
+      return {
+        ...prevMeal,
+        items: prevMeal.items.filter((item) => item.id !== itemId),
+      };
     });
   };
 
   const updateReceiptMeta = (meta: Partial<ReceiptMeta>) => {
-    if (!meal) return;
-    setMeal({
-      ...meal,
-      receiptMeta: { ...meal.receiptMeta, ...meta },
+    setMeal((prevMeal) => {
+      if (!prevMeal) return prevMeal;
+      return {
+        ...prevMeal,
+        receiptMeta: { ...prevMeal.receiptMeta, ...meta },
+      };
     });
   };
 
   const addAdjustment = (adjustment: Omit<Adjustment, 'id'>) => {
-    if (!meal) return;
-    const newAdjustment: Adjustment = {
-      ...adjustment,
-      id: generateId(),
-    };
-    setMeal({
-      ...meal,
-      adjustments: [...meal.adjustments, newAdjustment],
+    setMeal((prevMeal) => {
+      if (!prevMeal) return prevMeal;
+      const newAdjustment: Adjustment = {
+        ...adjustment,
+        id: generateId(),
+      };
+      return {
+        ...prevMeal,
+        adjustments: [...prevMeal.adjustments, newAdjustment],
+      };
     });
   };
 
   const removeAdjustment = (adjustmentId: string) => {
-    if (!meal) return;
-    setMeal({
-      ...meal,
-      adjustments: meal.adjustments.filter((adj) => adj.id !== adjustmentId),
+    setMeal((prevMeal) => {
+      if (!prevMeal) return prevMeal;
+      return {
+        ...prevMeal,
+        adjustments: prevMeal.adjustments.filter((adj) => adj.id !== adjustmentId),
+      };
     });
   };
 

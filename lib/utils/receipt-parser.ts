@@ -5,6 +5,10 @@ import { OCRResult, Item } from '../types/meal';
  */
 function cleanOCRText(text: string): string {
   return text
+    // Normalize unicode characters
+    .replace(/[\u2018\u2019\u201A\u201B]/g, "'")  // fancy single quotes -> straight
+    .replace(/[\u201C\u201D\u201E\u201F]/g, '"')  // fancy double quotes -> straight
+    .replace(/[\u2013\u2014]/g, '-')  // en-dash, em-dash -> hyphen
     // Fix common OCR mistakes with numbers
     .replace(/[oO](\d)/g, '0$1')  // O before digit -> 0
     .replace(/(\d)[oO]/g, '$10')  // O after digit -> 0
@@ -67,6 +71,19 @@ function isPotentialItemName(line: string, skipKeywords: string[], metaKeywords:
   
   // Skip lines that look like dates/times
   if (/^\d{1,2}\/\d{1,2}\/\d{2,4}/.test(line) || /^\d{1,2}:\d{2}/.test(line)) {
+    return false;
+  }
+  
+  // Skip lines that look like sentences/paragraphs (footer text)
+  // These typically have many words and common sentence patterns
+  const wordCount = line.split(/\s+/).length;
+  if (wordCount > 6) {
+    return false;
+  }
+  
+  // Skip lines containing common footer/legal phrases
+  const footerPhrases = ['which goes', 'directly to', 'do not', 'this fee', 'is not', 'is added'];
+  if (footerPhrases.some(phrase => lowerLine.includes(phrase))) {
     return false;
   }
   
