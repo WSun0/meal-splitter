@@ -7,6 +7,7 @@ import { generateId, safeJsonParse } from '../utils/helpers';
 interface MealContextType {
   meal: Meal | null;
   createMeal: (title: string, restaurant?: string, date?: string) => void;
+  updateMealInfo: (updates: { title?: string; restaurant?: string; date?: string }) => void;
   addDiner: (name: string) => void;
   removeDiner: (dinerId: string) => void;
   updateDiner: (dinerId: string, name: string) => void;
@@ -64,6 +65,18 @@ export function MealProvider({ children }: { children: ReactNode }) {
       adjustments: [],
     };
     setMeal(newMeal);
+  };
+
+  const updateMealInfo = (updates: { title?: string; restaurant?: string; date?: string }) => {
+    setMeal((prevMeal) => {
+      if (!prevMeal) return prevMeal;
+      return {
+        ...prevMeal,
+        ...(updates.title !== undefined && { title: updates.title }),
+        ...(updates.restaurant !== undefined && { restaurant: updates.restaurant }),
+        ...(updates.date !== undefined && { date: updates.date }),
+      };
+    });
   };
 
   const addDiner = (name: string) => {
@@ -189,6 +202,7 @@ export function MealProvider({ children }: { children: ReactNode }) {
       value={{
         meal,
         createMeal,
+        updateMealInfo,
         addDiner,
         removeDiner,
         updateDiner,

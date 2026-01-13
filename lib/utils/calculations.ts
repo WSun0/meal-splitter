@@ -181,11 +181,22 @@ export function reconcileRounding(
 }
 
 /**
+ * Calculate total adjustments amount
+ */
+export function calculateTotalAdjustments(meal: Meal): number {
+  return meal.adjustments.reduce((sum, adj) => sum + adj.amount, 0);
+}
+
+/**
  * Generate complete meal summary with reconciled totals
  */
 export function generateMealSummary(meal: Meal): MealSummary {
   const dinerTotals = calculateMealTotals(meal);
-  const targetTotal = meal.receiptMeta.total;
+  
+  // Target total must include adjustments - receiptMeta.total is just the receipt,
+  // adjustments are added on top
+  const adjustmentsTotal = calculateTotalAdjustments(meal);
+  const targetTotal = meal.receiptMeta.total + adjustmentsTotal;
 
   const reconciledTotals = reconcileRounding(dinerTotals, targetTotal);
 

@@ -3,11 +3,43 @@
 import { useMeal } from '@/lib/store/meal-store';
 import { generateMealSummary, generateSettlementSuggestions } from '@/lib/utils/calculations';
 import { formatCurrency } from '@/lib/utils/helpers';
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 
 export default function MealSummary() {
-  const { meal } = useMeal();
+  const { meal, updateMealInfo } = useMeal();
   const [selectedPayerId, setSelectedPayerId] = useState<string>('');
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const titleInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isEditingTitle && titleInputRef.current) {
+      titleInputRef.current.focus();
+      titleInputRef.current.select();
+    }
+  }, [isEditingTitle]);
+
+  const handleTitleEdit = () => {
+    if (meal) {
+      setEditTitle(meal.title);
+      setIsEditingTitle(true);
+    }
+  };
+
+  const handleTitleSave = () => {
+    if (editTitle.trim()) {
+      updateMealInfo({ title: editTitle.trim() });
+    }
+    setIsEditingTitle(false);
+  };
+
+  const handleTitleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleTitleSave();
+    } else if (e.key === 'Escape') {
+      setIsEditingTitle(false);
+    }
+  };
 
   if (!meal || meal.diners.length === 0 || meal.items.length === 0) {
     return (
@@ -32,9 +64,31 @@ export default function MealSummary() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
         </div>
-        <div>
-          <h2 className="text-2xl font-bold text-stone-800">Final Summary</h2>
-          <p className="text-sm text-stone-500">{meal.title}{meal.restaurant && ` • ${meal.restaurant}`}</p>
+        <div className="flex-1 min-w-0">
+          {isEditingTitle ? (
+            <input
+              ref={titleInputRef}
+              type="text"
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              onBlur={handleTitleSave}
+              onKeyDown={handleTitleKeyDown}
+              className="text-2xl font-bold text-stone-800 bg-transparent border-b-2 border-primary-400 outline-none w-full"
+              placeholder="Meal name..."
+            />
+          ) : (
+            <h2 
+              className="text-2xl font-bold text-stone-800 cursor-pointer hover:text-primary-600 transition-colors group flex items-center gap-2"
+              onClick={handleTitleEdit}
+              title="Click to edit meal name"
+            >
+              {meal.title}
+              <svg className="w-4 h-4 text-stone-400 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+              </svg>
+            </h2>
+          )}
+          <p className="text-sm text-stone-500">{meal.restaurant && `${meal.restaurant} • `}{meal.date}</p>
         </div>
       </div>
 
