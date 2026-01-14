@@ -105,8 +105,7 @@ export function calculateMealTotals(meal: Meal): DinerTotal[] {
     const allocatedTax = receiptMeta.tax * proportion;
     const allocatedTip = receiptMeta.tip * proportion;
 
-    // Simple calculation: items + tax + tip only
-    // Fees, discounts, and adjustments are excluded from the basic split
+    // Calculate total: items + tax + tip (proportionally allocated)
     const total = itemSubtotal + allocatedTax + allocatedTip;
 
     return {
@@ -190,17 +189,15 @@ export function calculateComputedTotal(meal: Meal): number {
 /**
  * Generate complete meal summary with reconciled totals
  * 
- * The total is computed from items + tax + tip + fees + discounts
+ * The total is computed from items + tax + tip
  * rather than using the parsed receipt total, to avoid OCR parsing errors.
  */
 export function generateMealSummary(meal: Meal): MealSummary {
   const dinerTotals = calculateMealTotals(meal);
   
-  // Calculate the total from components instead of using parsed total
+  // Calculate the total from components: items + tax + tip
   // This ensures accuracy even if the OCR parsed the final total incorrectly
-  const computedTotal = calculateComputedTotal(meal);
-  const adjustmentsTotal = calculateTotalAdjustments(meal);
-  const targetTotal = computedTotal + adjustmentsTotal;
+  const targetTotal = calculateComputedTotal(meal);
 
   const reconciledTotals = reconcileRounding(dinerTotals, targetTotal);
 
