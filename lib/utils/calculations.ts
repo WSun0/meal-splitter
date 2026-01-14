@@ -188,15 +188,33 @@ export function calculateTotalAdjustments(meal: Meal): number {
 }
 
 /**
+ * Calculate the computed total from items + tax + tip + fees - discounts.
+ * This is used instead of the parsed receipt total to avoid OCR errors.
+ */
+export function calculateComputedTotal(meal: Meal): number {
+  const itemsTotal = meal.items.reduce((sum, item) => sum + item.amount, 0);
+  const tax = meal.receiptMeta.tax;
+  const tip = meal.receiptMeta.tip;
+  const fees = meal.receiptMeta.fees.reduce((sum, fee) => sum + fee, 0);
+  const discounts = meal.receiptMeta.discounts.reduce((sum, disc) => sum + disc, 0);
+  
+  return itemsTotal + tax + tip + fees + discounts;
+}
+
+/**
  * Generate complete meal summary with reconciled totals
+ * 
+ * The total is computed from items + tax + tip + fees + discounts
+ * rather than using the parsed receipt total, to avoid OCR parsing errors.
  */
 export function generateMealSummary(meal: Meal): MealSummary {
   const dinerTotals = calculateMealTotals(meal);
   
-  // Target total must include adjustments - receiptMeta.total is just the receipt,
-  // adjustments are added on top
+  // Calculate the total from components instead of using parsed total
+  // This ensures accuracy even if the OCR parsed the final total incorrectly
+  const computedTotal = calculateComputedTotal(meal);
   const adjustmentsTotal = calculateTotalAdjustments(meal);
-  const targetTotal = meal.receiptMeta.total + adjustmentsTotal;
+  const targetTotal = computedTotal + adjustmentsTotal;
 
   const reconciledTotals = reconcileRounding(dinerTotals, targetTotal);
 

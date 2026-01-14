@@ -1,7 +1,7 @@
 'use client';
 
 import { useMeal } from '@/lib/store/meal-store';
-import { generateMealSummary, generateSettlementSuggestions } from '@/lib/utils/calculations';
+import { generateMealSummary, generateSettlementSuggestions, calculateComputedTotal } from '@/lib/utils/calculations';
 import { formatCurrency } from '@/lib/utils/helpers';
 import { useState, useRef, useEffect } from 'react';
 
@@ -51,6 +51,7 @@ export default function MealSummary() {
   }
 
   const summary = generateMealSummary(meal);
+  const computedTotal = calculateComputedTotal(meal);
   const settlements = selectedPayerId ? generateSettlementSuggestions(summary, selectedPayerId) : [];
 
   const colors = ['from-primary-400 to-primary-600', 'from-secondary-400 to-secondary-600', 'from-amber-400 to-amber-600', 'from-violet-400 to-violet-600', 'from-cyan-400 to-cyan-600'];
@@ -153,7 +154,7 @@ export default function MealSummary() {
         <h3 className="text-lg font-bold text-stone-800 mb-4">Receipt Totals</h3>
         <div className="bg-stone-50 rounded-2xl p-5 space-y-3">
           {[
-            ['Subtotal', meal.receiptMeta.subtotal],
+            ['Subtotal', meal.items.reduce((sum, item) => sum + item.amount, 0)],
             ['Tax', meal.receiptMeta.tax],
             ['Tip', meal.receiptMeta.tip],
             ...(meal.receiptMeta.fees.length > 0 ? [['Fees', meal.receiptMeta.fees.reduce((s, f) => s + f, 0)] as [string, number]] : []),
@@ -165,7 +166,7 @@ export default function MealSummary() {
           ))}
           <div className="pt-3 mt-3 border-t border-stone-200 flex justify-between">
             <span className="font-bold text-stone-800">Total</span>
-            <span className="text-2xl font-bold gradient-text">{formatCurrency(meal.receiptMeta.total)}</span>
+            <span className="text-2xl font-bold gradient-text">{formatCurrency(computedTotal)}</span>
           </div>
         </div>
       </div>
