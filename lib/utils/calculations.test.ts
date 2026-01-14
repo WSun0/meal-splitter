@@ -310,6 +310,66 @@ describe('User example: Will, Jensen, Michael bar bill', () => {
   });
 });
 
+describe('Explicit receipt total overrides itemized global charges', () => {
+  it('allocates the remainder (non-itemized charges) proportionally as adjustments, without showing fees', () => {
+    const will = createDiner('will', 'Will');
+    const jensen = createDiner('jensen', 'Jensen');
+    const michael = createDiner('michael', 'Michael');
+
+    const items: Item[] = [
+      createItemWithSingleAssignment('fog1', 'Fog Light', 19, 'will'),
+      createItemWithSingleAssignment('fog2', 'Fog Light', 19, 'will'),
+      createItemWithSingleAssignment('irish', 'Irish Coffee', 15, 'will'),
+      createItemWithSingleAssignment('hendricks', 'Hendricks + Passion Fruit Mule', 21, 'will'),
+      createItemWithSingleAssignment('fog3', 'Fog Light', 19, 'jensen'),
+      createItemWithSingleAssignment('hotdirty', 'Hot and Dirty', 21, 'jensen'),
+      createItemWithSingleAssignment('nightman', 'Nightman Cometh', 19, 'jensen'),
+      createItemWithSingleAssignment('social', 'Social Music', 19, 'michael'),
+      createItemWithSingleAssignment('ocho', 'Ocho Plata Margarita', 21, 'michael'),
+    ];
+
+    // Items subtotal = 173, tax = 12.11, tip = 37.
+    // Receipt total explicitly set to 237.11 (i.e., an extra 15 of non-itemized charges)
+    const meal = createMeal({
+      diners: [will, jensen, michael],
+      items,
+      receiptMeta: {
+        subtotal: 173,
+        tax: 12.11,
+        tip: 37,
+        fees: [],
+        discounts: [],
+        total: 237.11,
+      },
+    });
+
+    const summary = generateMealSummary(meal);
+    const totals = summary.dinerTotals;
+
+    // Fees should remain zero because none were itemized
+    expect(totals.every((t) => Math.abs(t.allocatedFees) < 0.0001)).toBe(true);
+
+    // The extra $15 should be allocated proportionally as adjustments ("Other")
+    const willTotal = totals.find((t) => t.dinerId === 'will')!;
+    const jensenTotal = totals.find((t) => t.dinerId === 'jensen')!;
+    const michaelTotal = totals.find((t) => t.dinerId === 'michael')!;
+
+    // Totals should sum to the explicit receipt total
+    const sumTotals = totals.reduce((s, t) => s + t.total, 0);
+    expect(sumTotals).toBeCloseTo(237.11, 2);
+
+    // Check that each total matches the expected rounded amounts after reconciliation
+    expect(willTotal.total).toBeCloseTo(101.42, 2);
+    expect(jensenTotal.total).toBeCloseTo(80.87, 2);
+    expect(michaelTotal.total).toBeCloseTo(54.82, 2);
+
+    // Adjustments should capture the unitemized remainder (> 0)
+    expect(willTotal.adjustments).toBeGreaterThan(0);
+    expect(jensenTotal.adjustments).toBeGreaterThan(0);
+    expect(michaelTotal.adjustments).toBeGreaterThan(0);
+  });
+});
+
 describe('reconcileRounding', () => {
   it('adjusts totals to match target when sum is slightly off', () => {
     const dinerTotals: DinerTotal[] = [
@@ -595,7 +655,7 @@ describe('Adjustments helper function', () => {
         tip: 0,
         fees: [],
         discounts: [],
-        total: 95,
+        total: 0, // Use computed total (items + adjustments)
       },
       adjustments: [
         {

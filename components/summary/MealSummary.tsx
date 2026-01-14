@@ -51,7 +51,7 @@ export default function MealSummary() {
   }
 
   const summary = generateMealSummary(meal);
-  const computedTotal = calculateComputedTotal(meal);
+  const computedTotal = meal.receiptMeta.total > 0 ? meal.receiptMeta.total : calculateComputedTotal(meal);
   const settlements = selectedPayerId ? generateSettlementSuggestions(summary, selectedPayerId) : [];
   const unassignedItems = getUnassignedItems(meal);
   const totalAdjustments = calculateTotalAdjustments(meal);

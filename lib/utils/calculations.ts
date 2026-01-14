@@ -98,6 +98,7 @@ export function calculateMealTotals(meal: Meal): DinerTotal[] {
   // Step 3: Calculate global charges
   const totalFees = receiptMeta.fees.reduce((sum, f) => sum + f, 0);
   const totalDiscounts = receiptMeta.discounts.reduce((sum, d) => sum + d, 0); // stored as negative
+  const hasExplicitTotal = receiptMeta.total > 0;
   
   // Meal-level adjustments (not person-specific)
   const mealLevelAdjustments = adjustments.filter((adj) => adj.scope === 'meal');
@@ -139,11 +140,24 @@ export function calculateMealTotals(meal: Meal): DinerTotal[] {
     // Person-specific adjustments
     const personAdjustments = calculatePersonSpecificAdjustments(adjustments, diner.id);
     
-    // Total adjustments for this diner
-    const totalAdjustments = allocatedMealAdjustments + personAdjustments;
+    // Total adjustments for this diner (will include any explicit equal split + person-specific)
+    let totalAdjustments = allocatedMealAdjustments + personAdjustments;
 
-    // Final total: items + tax + tip + fees + discounts + adjustments
-    const total = itemSubtotal + allocatedTax + allocatedTip + allocatedFees + allocatedDiscounts + totalAdjustments;
+    // Provisional total using itemized components
+    let total = itemSubtotal + allocatedTax + allocatedTip + allocatedFees + allocatedDiscounts + totalAdjustments;
+
+    // If an explicit receipt total is provided, force totals to reconcile to that value
+    if (hasExplicitTotal) {
+      // Target total for this diner based on share of explicit receipt total
+      const targetTotalForDiner = proportion * receiptMeta.total;
+
+      // Remainder captures any mismatch between itemized breakdown and explicit total (e.g., service fees not itemized)
+      const remainder = targetTotalForDiner - total;
+
+      // Add the remainder to adjustments (displayed as "Other") so components sum exactly to target
+      totalAdjustments += remainder;
+      total = targetTotalForDiner;
+    }
 
     return {
       dinerId: diner.id,
@@ -306,8 +320,8 @@ export function validateSubtotalReconciliation(meal: Meal): number {
 export function generateMealSummary(meal: Meal): MealSummary {
   const dinerTotals = calculateMealTotals(meal);
   
-  // Calculate the target total from all components
-  const targetTotal = calculateComputedTotal(meal);
+  // If explicit receipt total is provided, use it; otherwise compute from components
+  const targetTotal = meal.receiptMeta.total > 0 ? meal.receiptMeta.total : calculateComputedTotal(meal);
 
   // Apply largest remainder rounding to ensure exact reconciliation
   const reconciledTotals = reconcileRounding(dinerTotals, targetTotal);
