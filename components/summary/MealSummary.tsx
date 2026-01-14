@@ -123,7 +123,7 @@ export default function MealSummary() {
               <p className="text-2xl font-bold gradient-text">{formatCurrency(dt.total)}</p>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <div className="bg-white p-3 rounded-xl border border-stone-100">
                 <p className="text-xs text-stone-400 mb-1">Items</p>
                 <p className="font-semibold text-stone-700">{formatCurrency(dt.itemSubtotal)}</p>
@@ -136,12 +136,6 @@ export default function MealSummary() {
                 <p className="text-xs text-stone-400 mb-1">Tip</p>
                 <p className="font-semibold text-stone-700">{formatCurrency(dt.allocatedTip)}</p>
               </div>
-              {(dt.allocatedFees > 0 || dt.allocatedDiscounts !== 0 || dt.adjustments !== 0) && (
-                <div className="bg-white p-3 rounded-xl border border-stone-100">
-                  <p className="text-xs text-stone-400 mb-1">Other</p>
-                  <p className="font-semibold text-stone-700">{formatCurrency(dt.allocatedFees + dt.allocatedDiscounts + dt.adjustments)}</p>
-                </div>
-              )}
             </div>
           </div>
         ))}

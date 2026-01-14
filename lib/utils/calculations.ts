@@ -105,21 +105,9 @@ export function calculateMealTotals(meal: Meal): DinerTotal[] {
     const allocatedTax = receiptMeta.tax * proportion;
     const allocatedTip = receiptMeta.tip * proportion;
 
-    const totalFees = receiptMeta.fees.reduce((sum, fee) => sum + fee, 0);
-    const allocatedFees = totalFees * proportion;
-
-    const totalDiscounts = receiptMeta.discounts.reduce((sum, disc) => sum + disc, 0);
-    const allocatedDiscounts = totalDiscounts * proportion;
-
-    // Calculate adjustments
-    const adjustmentsTotal = calculateDinerAdjustments(
-      adjustments,
-      diner.id,
-      itemSubtotal,
-      totalSubtotal
-    );
-
-    const total = itemSubtotal + allocatedTax + allocatedTip + allocatedFees + allocatedDiscounts + adjustmentsTotal;
+    // Simple calculation: items + tax + tip only
+    // Fees, discounts, and adjustments are excluded from the basic split
+    const total = itemSubtotal + allocatedTax + allocatedTip;
 
     return {
       dinerId: diner.id,
@@ -127,9 +115,9 @@ export function calculateMealTotals(meal: Meal): DinerTotal[] {
       itemSubtotal,
       allocatedTax,
       allocatedTip,
-      allocatedFees,
-      allocatedDiscounts,
-      adjustments: adjustmentsTotal,
+      allocatedFees: 0,
+      allocatedDiscounts: 0,
+      adjustments: 0,
       total,
     };
   });
@@ -188,17 +176,15 @@ export function calculateTotalAdjustments(meal: Meal): number {
 }
 
 /**
- * Calculate the computed total from items + tax + tip + fees - discounts.
+ * Calculate the computed total from items + tax + tip.
  * This is used instead of the parsed receipt total to avoid OCR errors.
  */
 export function calculateComputedTotal(meal: Meal): number {
   const itemsTotal = meal.items.reduce((sum, item) => sum + item.amount, 0);
   const tax = meal.receiptMeta.tax;
   const tip = meal.receiptMeta.tip;
-  const fees = meal.receiptMeta.fees.reduce((sum, fee) => sum + fee, 0);
-  const discounts = meal.receiptMeta.discounts.reduce((sum, disc) => sum + disc, 0);
   
-  return itemsTotal + tax + tip + fees + discounts;
+  return itemsTotal + tax + tip;
 }
 
 /**
