@@ -1,7 +1,7 @@
 'use client';
 
 import { useMeal } from '@/lib/store/meal-store';
-import { generateMealSummary, generateSettlementSuggestions, calculateComputedTotal } from '@/lib/utils/calculations';
+import { generateMealSummary, generateSettlementSuggestions, calculateComputedTotal, getUnassignedItems, calculateTotalAdjustments } from '@/lib/utils/calculations';
 import { formatCurrency } from '@/lib/utils/helpers';
 import { useState, useRef, useEffect } from 'react';
 
@@ -53,6 +53,13 @@ export default function MealSummary() {
   const summary = generateMealSummary(meal);
   const computedTotal = calculateComputedTotal(meal);
   const settlements = selectedPayerId ? generateSettlementSuggestions(summary, selectedPayerId) : [];
+  const unassignedItems = getUnassignedItems(meal);
+  const totalAdjustments = calculateTotalAdjustments(meal);
+  
+  // Determine what extra fields to show based on what's present
+  const hasAnyFees = summary.dinerTotals.some((dt) => Math.abs(dt.allocatedFees) > 0.001);
+  const hasAnyDiscounts = summary.dinerTotals.some((dt) => Math.abs(dt.allocatedDiscounts) > 0.001);
+  const hasAnyAdjustments = summary.dinerTotals.some((dt) => Math.abs(dt.adjustments) > 0.001);
 
   const colors = ['from-primary-400 to-primary-600', 'from-secondary-400 to-secondary-600', 'from-amber-400 to-amber-600', 'from-violet-400 to-violet-600', 'from-cyan-400 to-cyan-600'];
 
@@ -92,6 +99,28 @@ export default function MealSummary() {
           <p className="text-sm text-stone-500">{meal.restaurant && `${meal.restaurant} • `}{meal.date}</p>
         </div>
       </div>
+
+      {/* Unassigned items warning */}
+      {unassignedItems.length > 0 && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-2xl">
+          <div className="flex gap-3">
+            <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+              <svg className="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+            <div className="text-sm text-red-800">
+              <strong>Warning:</strong> {unassignedItems.length} item{unassignedItems.length > 1 ? 's are' : ' is'} not assigned to anyone:
+              <ul className="mt-1 ml-4 list-disc">
+                {unassignedItems.slice(0, 3).map((item) => (
+                  <li key={item.id}>{item.name} ({formatCurrency(item.amount)})</li>
+                ))}
+                {unassignedItems.length > 3 && <li>...and {unassignedItems.length - 3} more</li>}
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Reconciliation warning */}
       {Math.abs(summary.reconciliationDiff) > 0.01 && (
@@ -136,6 +165,28 @@ export default function MealSummary() {
                 <p className="text-xs text-stone-400 mb-1">Tip</p>
                 <p className="font-semibold text-stone-700">{formatCurrency(dt.allocatedTip)}</p>
               </div>
+              {hasAnyFees && (
+                <div className="bg-white p-3 rounded-xl border border-stone-100">
+                  <p className="text-xs text-stone-400 mb-1">Fees</p>
+                  <p className="font-semibold text-stone-700">{formatCurrency(dt.allocatedFees)}</p>
+                </div>
+              )}
+              {hasAnyDiscounts && (
+                <div className="bg-white p-3 rounded-xl border border-stone-100">
+                  <p className="text-xs text-stone-400 mb-1">Discounts</p>
+                  <p className={`font-semibold ${dt.allocatedDiscounts < 0 ? 'text-green-600' : 'text-stone-700'}`}>
+                    {dt.allocatedDiscounts < 0 ? '−' : ''}{formatCurrency(Math.abs(dt.allocatedDiscounts))}
+                  </p>
+                </div>
+              )}
+              {hasAnyAdjustments && (
+                <div className="bg-white p-3 rounded-xl border border-stone-100">
+                  <p className="text-xs text-stone-400 mb-1">Other</p>
+                  <p className={`font-semibold ${dt.adjustments < 0 ? 'text-green-600' : dt.adjustments > 0 ? 'text-red-500' : 'text-stone-700'}`}>
+                    {dt.adjustments < 0 ? '−' : dt.adjustments > 0 ? '+' : ''}{formatCurrency(Math.abs(dt.adjustments))}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         ))}
@@ -147,17 +198,38 @@ export default function MealSummary() {
       <div>
         <h3 className="text-lg font-bold text-stone-800 mb-4">Receipt Totals</h3>
         <div className="bg-stone-50 rounded-2xl p-5 space-y-3">
-          {[
-            ['Subtotal', meal.items.reduce((sum, item) => sum + item.amount, 0)],
-            ['Tax', meal.receiptMeta.tax],
-            ['Tip', meal.receiptMeta.tip],
-            ...(meal.receiptMeta.fees.length > 0 ? [['Fees', meal.receiptMeta.fees.reduce((s, f) => s + f, 0)] as [string, number]] : []),
-          ].map(([label, value]) => (
-            <div key={label as string} className="flex justify-between text-sm">
-              <span className="text-stone-500">{label}</span>
-              <span className="text-stone-700 font-medium">{formatCurrency(value as number)}</span>
+          <div className="flex justify-between text-sm">
+            <span className="text-stone-500">Subtotal</span>
+            <span className="text-stone-700 font-medium">{formatCurrency(meal.items.reduce((sum, item) => sum + item.amount, 0))}</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-stone-500">Tax</span>
+            <span className="text-stone-700 font-medium">{formatCurrency(meal.receiptMeta.tax)}</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-stone-500">Tip</span>
+            <span className="text-stone-700 font-medium">{formatCurrency(meal.receiptMeta.tip)}</span>
+          </div>
+          {meal.receiptMeta.fees.length > 0 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-stone-500">Fees</span>
+              <span className="text-stone-700 font-medium">{formatCurrency(meal.receiptMeta.fees.reduce((s, f) => s + f, 0))}</span>
             </div>
-          ))}
+          )}
+          {meal.receiptMeta.discounts.length > 0 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-stone-500">Discounts</span>
+              <span className="text-green-600 font-medium">−{formatCurrency(Math.abs(meal.receiptMeta.discounts.reduce((s, d) => s + d, 0)))}</span>
+            </div>
+          )}
+          {totalAdjustments !== 0 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-stone-500">Adjustments</span>
+              <span className={`font-medium ${totalAdjustments < 0 ? 'text-green-600' : 'text-red-500'}`}>
+                {totalAdjustments < 0 ? '−' : '+'}{formatCurrency(Math.abs(totalAdjustments))}
+              </span>
+            </div>
+          )}
           <div className="pt-3 mt-3 border-t border-stone-200 flex justify-between">
             <span className="font-bold text-stone-800">Total</span>
             <span className="text-2xl font-bold gradient-text">{formatCurrency(computedTotal)}</span>

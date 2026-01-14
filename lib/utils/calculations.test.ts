@@ -7,9 +7,11 @@ import {
   generateMealSummary,
   calculateComputedTotal,
   calculateTotalAdjustments,
-  calculateDinerAdjustments,
+  calculatePersonSpecificAdjustments,
+  getUnassignedItems,
+  calculateGroupSubtotal,
 } from './calculations';
-import { Meal, Item, Diner, DinerTotal } from '../types/meal';
+import { Meal, Item, Diner, DinerTotal, Adjustment } from '../types/meal';
 
 // Helper to create a basic meal structure
 function createMeal(overrides: Partial<Meal> = {}): Meal {
@@ -141,7 +143,7 @@ describe('calculateDinerSubtotal', () => {
 });
 
 describe('calculateComputedTotal', () => {
-  it('correctly sums items + tax + tip', () => {
+  it('correctly sums items + tax + tip + fees + discounts', () => {
     const meal = createMeal({
       items: [
         createItemWithSingleAssignment('item1', 'Item 1', 50, 'diner1'),
@@ -151,14 +153,14 @@ describe('calculateComputedTotal', () => {
         subtotal: 80,
         tax: 12.11,
         tip: 37,
-        fees: [5], // Ignored
-        discounts: [-10], // Ignored
-        total: 129.11, // This would be ignored
+        fees: [5],
+        discounts: [-10],
+        total: 124.11,
       },
     });
 
-    // 50 + 30 + 12.11 + 37 = 129.11 (fees and discounts are ignored)
-    expect(calculateComputedTotal(meal)).toBeCloseTo(129.11, 2);
+    // 50 + 30 + 12.11 + 37 + 5 - 10 = 124.11
+    expect(calculateComputedTotal(meal)).toBeCloseTo(124.11, 2);
   });
 
   it('works with no fees or discounts', () => {
@@ -177,6 +179,35 @@ describe('calculateComputedTotal', () => {
     });
 
     expect(calculateComputedTotal(meal)).toBeCloseTo(222.11, 2);
+  });
+
+  it('includes adjustments in total', () => {
+    const meal = createMeal({
+      items: [
+        createItemWithSingleAssignment('item1', 'Food', 50, 'diner1'),
+      ],
+      receiptMeta: {
+        subtotal: 50,
+        tax: 5,
+        tip: 10,
+        fees: [],
+        discounts: [],
+        total: 70,
+      },
+      adjustments: [
+        {
+          id: 'adj1',
+          label: 'Service charge',
+          amount: 5,
+          type: 'debit',
+          scope: 'meal',
+          allocationRule: 'proportional',
+        },
+      ],
+    });
+
+    // 50 + 5 + 10 + 5 (adjustment) = 70
+    expect(calculateComputedTotal(meal)).toBe(70);
   });
 });
 
@@ -458,48 +489,27 @@ describe('Edge cases', () => {
 });
 
 describe('Adjustments helper function', () => {
-  it('calculates proportional meal-level adjustment correctly', () => {
-    const adjustments = [
-      {
-        id: 'adj1',
-        label: 'Service Charge',
-        amount: 10,
-        type: 'debit' as const,
-        scope: 'meal' as const,
-        allocationRule: 'proportional' as const,
-      },
-    ];
-
-    // Alice has 60% of subtotal, Bob has 40%
-    // Alice should get 6 of the adjustment, Bob should get 4
-    const aliceAdj = calculateDinerAdjustments(adjustments, 'a', 60, 100);
-    const bobAdj = calculateDinerAdjustments(adjustments, 'b', 40, 100);
-
-    expect(aliceAdj).toBe(6);
-    expect(bobAdj).toBe(4);
-  });
-
   it('calculates person-specific adjustment correctly', () => {
-    const adjustments = [
+    const adjustments: Adjustment[] = [
       {
         id: 'adj1',
         label: 'Birthday discount',
         amount: -5,
-        type: 'credit' as const,
-        scope: 'person' as const,
-        allocationRule: 'proportional' as const,
+        type: 'credit',
+        scope: 'person',
+        allocationRule: 'proportional',
         personId: 'alice',
       },
     ];
 
-    const aliceAdj = calculateDinerAdjustments(adjustments, 'alice', 50, 100);
-    const bobAdj = calculateDinerAdjustments(adjustments, 'bob', 50, 100);
+    const aliceAdj = calculatePersonSpecificAdjustments(adjustments, 'alice');
+    const bobAdj = calculatePersonSpecificAdjustments(adjustments, 'bob');
 
     expect(aliceAdj).toBe(-5);
     expect(bobAdj).toBe(0);
   });
 
-  it('adjustments are excluded from diner total (simplified calculation)', () => {
+  it('adjustments are included in diner totals proportionally', () => {
     const meal = createMeal({
       diners: [createDiner('solo', 'Solo')],
       items: [createItemWithSingleAssignment('item1', 'Food', 50, 'solo')],
@@ -509,7 +519,7 @@ describe('Adjustments helper function', () => {
         tip: 10,
         fees: [],
         discounts: [],
-        total: 65,
+        total: 70,
       },
       adjustments: [
         {
@@ -525,9 +535,89 @@ describe('Adjustments helper function', () => {
 
     const summary = generateMealSummary(meal);
     
-    // Adjustments are ignored in simplified calculation
-    // Items (50) + Tax (5) + Tip (10) = 65
-    expect(summary.dinerTotals[0].total).toBeCloseTo(65, 1);
+    // Items (50) + Tax (5) + Tip (10) + Adjustment (5) = 70
+    expect(summary.dinerTotals[0].total).toBeCloseTo(70, 2);
+  });
+
+  it('allocates meal-level adjustments proportionally', () => {
+    const meal = createMeal({
+      diners: [
+        createDiner('big', 'Big Spender'),
+        createDiner('small', 'Small Spender'),
+      ],
+      items: [
+        createItemWithSingleAssignment('expensive', 'Lobster', 80, 'big'),
+        createItemWithSingleAssignment('cheap', 'Salad', 20, 'small'),
+      ],
+      receiptMeta: {
+        subtotal: 100,
+        tax: 0,
+        tip: 0,
+        fees: [],
+        discounts: [],
+        total: 110,
+      },
+      adjustments: [
+        {
+          id: 'adj1',
+          label: 'Service Charge',
+          amount: 10,
+          type: 'debit',
+          scope: 'meal',
+          allocationRule: 'proportional',
+        },
+      ],
+    });
+
+    const summary = generateMealSummary(meal);
+    const bigSpender = summary.dinerTotals.find((t) => t.dinerId === 'big')!;
+    const smallSpender = summary.dinerTotals.find((t) => t.dinerId === 'small')!;
+
+    // Big spender: 80% of items (80) + 80% of adjustment (8) = 88
+    expect(bigSpender.total).toBeCloseTo(88, 2);
+    // Small spender: 20% of items (20) + 20% of adjustment (2) = 22
+    expect(smallSpender.total).toBeCloseTo(22, 2);
+  });
+
+  it('applies person-specific adjustments only to that person', () => {
+    const meal = createMeal({
+      diners: [
+        createDiner('alice', 'Alice'),
+        createDiner('bob', 'Bob'),
+      ],
+      items: [
+        createItemWithSingleAssignment('item1', 'Food', 50, 'alice'),
+        createItemWithSingleAssignment('item2', 'Food', 50, 'bob'),
+      ],
+      receiptMeta: {
+        subtotal: 100,
+        tax: 0,
+        tip: 0,
+        fees: [],
+        discounts: [],
+        total: 95,
+      },
+      adjustments: [
+        {
+          id: 'adj1',
+          label: 'Birthday discount',
+          amount: -5,
+          type: 'credit',
+          scope: 'person',
+          allocationRule: 'proportional',
+          personId: 'alice',
+        },
+      ],
+    });
+
+    const summary = generateMealSummary(meal);
+    const alice = summary.dinerTotals.find((t) => t.dinerId === 'alice')!;
+    const bob = summary.dinerTotals.find((t) => t.dinerId === 'bob')!;
+
+    // Alice: 50 - 5 (personal discount) = 45
+    expect(alice.total).toBe(45);
+    // Bob: 50
+    expect(bob.total).toBe(50);
   });
 });
 
@@ -632,40 +722,127 @@ describe('Rounding precision', () => {
   });
 });
 
-describe('Fees and discounts are excluded from calculation', () => {
-  it('ignores fees in total calculation', () => {
+describe('Fees and discounts are included in calculation', () => {
+  it('includes fees in total calculation and allocates proportionally', () => {
     const meal = createMeal({
-      diners: [createDiner('solo', 'Solo')],
-      items: [createItemWithSingleAssignment('item1', 'Food', 50, 'solo')],
+      diners: [
+        createDiner('big', 'Big Spender'),
+        createDiner('small', 'Small Spender'),
+      ],
+      items: [
+        createItemWithSingleAssignment('expensive', 'Lobster', 80, 'big'),
+        createItemWithSingleAssignment('cheap', 'Salad', 20, 'small'),
+      ],
       receiptMeta: {
-        subtotal: 50,
-        tax: 5,
-        tip: 10,
-        fees: [3, 2], // Service fee + delivery fee (ignored)
+        subtotal: 100,
+        tax: 10,
+        tip: 20,
+        fees: [5], // Service fee
         discounts: [],
-        total: 70,
+        total: 135,
       },
     });
 
-    // Fees are ignored: 50 + 5 + 10 = 65
-    expect(calculateComputedTotal(meal)).toBe(65);
+    // 80 + 20 + 10 + 20 + 5 = 135
+    expect(calculateComputedTotal(meal)).toBe(135);
+
+    const summary = generateMealSummary(meal);
+    const bigSpender = summary.dinerTotals.find((t) => t.dinerId === 'big')!;
+    const smallSpender = summary.dinerTotals.find((t) => t.dinerId === 'small')!;
+
+    // Big spender gets 80% of fees (4)
+    expect(bigSpender.allocatedFees).toBe(4);
+    // Small spender gets 20% of fees (1)
+    expect(smallSpender.allocatedFees).toBe(1);
   });
 
-  it('ignores discounts in total calculation', () => {
+  it('includes discounts in total calculation and allocates proportionally', () => {
     const meal = createMeal({
-      diners: [createDiner('solo', 'Solo')],
-      items: [createItemWithSingleAssignment('item1', 'Food', 50, 'solo')],
+      diners: [
+        createDiner('big', 'Big Spender'),
+        createDiner('small', 'Small Spender'),
+      ],
+      items: [
+        createItemWithSingleAssignment('expensive', 'Lobster', 80, 'big'),
+        createItemWithSingleAssignment('cheap', 'Salad', 20, 'small'),
+      ],
       receiptMeta: {
-        subtotal: 50,
-        tax: 5,
-        tip: 10,
+        subtotal: 100,
+        tax: 10,
+        tip: 20,
         fees: [],
-        discounts: [-10], // $10 discount (ignored)
-        total: 55,
+        discounts: [-10], // $10 discount (stored as negative)
+        total: 120,
       },
     });
 
-    // Discounts are ignored: 50 + 5 + 10 = 65
-    expect(calculateComputedTotal(meal)).toBe(65);
+    // 80 + 20 + 10 + 20 - 10 = 120
+    expect(calculateComputedTotal(meal)).toBe(120);
+
+    const summary = generateMealSummary(meal);
+    const bigSpender = summary.dinerTotals.find((t) => t.dinerId === 'big')!;
+    const smallSpender = summary.dinerTotals.find((t) => t.dinerId === 'small')!;
+
+    // Big spender gets 80% of discount (-8)
+    expect(bigSpender.allocatedDiscounts).toBe(-8);
+    // Small spender gets 20% of discount (-2)
+    expect(smallSpender.allocatedDiscounts).toBe(-2);
+  });
+});
+
+describe('Unassigned items detection', () => {
+  it('returns empty array when all items are assigned', () => {
+    const meal = createMeal({
+      diners: [createDiner('solo', 'Solo')],
+      items: [createItemWithSingleAssignment('item1', 'Food', 50, 'solo')],
+    });
+
+    expect(getUnassignedItems(meal)).toHaveLength(0);
+  });
+
+  it('detects items with no assignments', () => {
+    const meal = createMeal({
+      diners: [createDiner('solo', 'Solo')],
+      items: [
+        createItemWithSingleAssignment('item1', 'Food', 50, 'solo'),
+        {
+          id: 'item2',
+          name: 'Unassigned',
+          quantity: 1,
+          amount: 25,
+          assignments: [], // No assignments
+        },
+      ],
+    });
+
+    const unassigned = getUnassignedItems(meal);
+    expect(unassigned).toHaveLength(1);
+    expect(unassigned[0].name).toBe('Unassigned');
+  });
+
+  it('detects items assigned to non-existent diners', () => {
+    const meal = createMeal({
+      diners: [createDiner('solo', 'Solo')],
+      items: [
+        createItemWithSingleAssignment('item1', 'Food', 50, 'deleted-diner'),
+      ],
+    });
+
+    const unassigned = getUnassignedItems(meal);
+    expect(unassigned).toHaveLength(1);
+  });
+});
+
+describe('Group subtotal calculation', () => {
+  it('sums all item amounts', () => {
+    const meal = createMeal({
+      items: [
+        createItemWithSingleAssignment('item1', 'Item 1', 50, 'diner1'),
+        createItemWithSingleAssignment('item2', 'Item 2', 30, 'diner2'),
+        createItemWithSingleAssignment('item3', 'Item 3', 20, 'diner1'),
+      ],
+    });
+
+    expect(calculateGroupSubtotal(meal)).toBe(100);
   });
 });
