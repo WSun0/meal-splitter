@@ -179,7 +179,7 @@ export default function ItemAssignment() {
         </div>
         <div>
           <h2 className="text-xl font-bold text-stone-800">Assign Items</h2>
-          <p className="text-sm text-stone-500">Drag items to buckets · Red border = unassigned</p>
+          <p className="text-sm text-stone-500">Drag items into multiple buckets to split costs · Red = unassigned</p>
         </div>
       </div>
 
@@ -261,7 +261,7 @@ export default function ItemAssignment() {
 
       {/* BOTTOM: Diner Buckets */}
       <section className="space-y-3">
-        <h3 className="text-sm font-semibold text-stone-600 uppercase tracking-wide">Diner Buckets</h3>
+        <h3 className="text-sm font-semibold text-stone-600 uppercase tracking-wide">Diners</h3>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {meal.diners.map((diner, dinerIdx) => {
             const assignedPortions = portionEntries.filter((portion) =>
