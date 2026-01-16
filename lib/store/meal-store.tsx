@@ -100,6 +100,10 @@ export function MealProvider({ children }: { children: ReactNode }) {
       const updatedItems = prevMeal.items.map((item) => ({
         ...item,
         assignments: item.assignments.filter((a) => a.dinerId !== dinerId),
+        portions: item.portions?.map((portion) => ({
+          ...portion,
+          assignments: portion.assignments.filter((a) => a.dinerId !== dinerId),
+        })),
       }));
       return {
         ...prevMeal,
@@ -140,7 +144,20 @@ export function MealProvider({ children }: { children: ReactNode }) {
       return {
         ...prevMeal,
         items: prevMeal.items.map((item) =>
-          item.id === itemId ? { ...item, ...updates } : item
+          item.id === itemId
+            ? {
+              ...item,
+              ...updates,
+              ...(updates.quantity !== undefined && item.portions && !updates.portions
+                ? {
+                  portions: Array.from({ length: Math.max(1, Math.round(updates.quantity || 1)) }, (_, index) => ({
+                    id: item.portions?.[index]?.id ?? generateId(),
+                    assignments: item.portions?.[index]?.assignments ?? [],
+                  })),
+                }
+                : {}),
+            }
+            : item
         ),
       };
     });

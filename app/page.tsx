@@ -70,7 +70,12 @@ function MealSplitApp() {
 
   const canProceedFromDiners = meal && meal.diners.length > 0;
   const canProceedFromItems = meal && meal.items.length > 0;
-  const hasAssignments = meal?.items.some((item) => item.assignments.length > 0);
+  const hasAssignments = meal?.items.some((item) => {
+    if (item.portions && item.portions.length > 0) {
+      return item.portions.some((portion) => portion.assignments.length > 0);
+    }
+    return item.assignments.length > 0;
+  });
 
   const currentStepIndex = steps.findIndex(s => s.id === currentStep);
 

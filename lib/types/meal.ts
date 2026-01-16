@@ -16,12 +16,18 @@ export interface Assignment {
   value?: number;
 }
 
+export interface ItemPortion {
+  id: string;
+  assignments: Assignment[];
+}
+
 export interface Item {
   id: string;
   name: string;
   quantity: number;
   amount: number; // total amount for this item (qty * unit price)
   assignments: Assignment[];
+  portions?: ItemPortion[];
   isUncertain?: boolean; // flag for OCR uncertainty
 }
 
@@ -53,7 +59,7 @@ export interface ReceiptMeta {
 }
 
 export interface OCRResult {
-  items: Omit<Item, 'id' | 'assignments'>[];
+  items: Omit<Item, 'id' | 'assignments' | 'portions'>[];
   receiptMeta: Partial<ReceiptMeta>;
   confidence: number; // 0-1
   rawText?: string;

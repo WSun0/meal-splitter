@@ -98,7 +98,7 @@ export function parseReceiptText(text: string, confidence: number): OCRResult {
   const cleanedText = cleanOCRText(text);
   const lines = cleanedText.split('\n').map((line) => line.trim()).filter((line) => line.length > 0);
 
-  const items: Omit<Item, 'id' | 'assignments'>[] = [];
+  const items: Omit<Item, 'id' | 'assignments' | 'portions'>[] = [];
   const receiptMeta: any = {
     subtotal: 0,
     tax: 0,

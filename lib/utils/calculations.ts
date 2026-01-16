@@ -1,28 +1,29 @@
-import { Meal, Item, DinerTotal, MealSummary, Adjustment } from '../types/meal';
+import { Meal, Item, DinerTotal, MealSummary, Adjustment, Assignment, ItemPortion } from '../types/meal';
 
 /**
  * Calculate how much of an item belongs to a specific diner based on their assignment weight.
  * 
  * For each item, the sum of all diner weights equals 1 (100% of the item).
  */
-export function calculateItemShareForDiner(
-  item: Item,
+function calculateAssignmentShare(
+  amount: number,
+  assignments: Assignment[],
   dinerId: string
 ): number {
-  const assignment = item.assignments.find((a) => a.dinerId === dinerId);
+  const assignment = assignments.find((a) => a.dinerId === dinerId);
   if (!assignment) return 0;
 
-  const assignedDiners = item.assignments;
+  const assignedDiners = assignments;
   if (assignedDiners.length === 0) return 0;
 
   switch (assignment.splitType) {
     case 'single':
       // 100% to this diner (weight = 1)
-      return item.amount;
+      return amount;
 
     case 'even':
       // Split evenly among all assigned diners (weight = 1/k for k diners)
-      return item.amount / assignedDiners.length;
+      return amount / assignedDiners.length;
 
     case 'shares': {
       // Calculate based on shares (weight = thisShare / totalShares)
@@ -32,18 +33,46 @@ export function calculateItemShareForDiner(
       );
       if (totalShares === 0) return 0;
       const thisShare = assignment.value || 1;
-      return (item.amount * thisShare) / totalShares;
+      return (amount * thisShare) / totalShares;
     }
 
     case 'percentage': {
       // Calculate based on percentage (weight = percentage / 100)
       const percentage = assignment.value || 0;
-      return (item.amount * percentage) / 100;
+      return (amount * percentage) / 100;
     }
 
     default:
       return 0;
   }
+}
+
+function getItemPortionsForCalculation(item: Item): Array<{ amount: number; assignments: Assignment[] }> {
+  const quantity = Math.max(1, Math.round(item.quantity || 1));
+  const portions: ItemPortion[] = item.portions && item.portions.length > 0
+    ? item.portions
+    : [];
+
+  if (portions.length === 0) {
+    return [{ amount: item.amount, assignments: item.assignments }];
+  }
+
+  const portionCount = portions.length || quantity;
+  const unitAmount = portionCount > 0 ? item.amount / portionCount : item.amount;
+  return portions.map((portion) => ({
+    amount: unitAmount,
+    assignments: portion.assignments,
+  }));
+}
+
+export function calculateItemShareForDiner(
+  item: Item,
+  dinerId: string
+): number {
+  const portions = getItemPortionsForCalculation(item);
+  return portions.reduce((sum, portion) => {
+    return sum + calculateAssignmentShare(portion.amount, portion.assignments, dinerId);
+  }, 0);
 }
 
 /**
@@ -274,15 +303,26 @@ export function calculateComputedTotal(meal: Meal): number {
  */
 export function getUnassignedItems(meal: Meal): Item[] {
   return meal.items.filter((item) => {
-    // No assignments at all
-    if (item.assignments.length === 0) return true;
-    
-    // Check if all assigned diners still exist
-    const validAssignments = item.assignments.filter((a) =>
-      meal.diners.some((d) => d.id === a.dinerId)
-    );
-    
-    return validAssignments.length === 0;
+    const portions = item.portions && item.portions.length > 0
+      ? item.portions
+      : [{ id: 'legacy', assignments: item.assignments }];
+
+    // Any portion missing assignments should be flagged
+    for (const portion of portions) {
+      if (portion.assignments.length === 0) {
+        return true;
+      }
+
+      const validAssignments = portion.assignments.filter((a) =>
+        meal.diners.some((d) => d.id === a.dinerId)
+      );
+
+      if (validAssignments.length === 0) {
+        return true;
+      }
+    }
+
+    return false;
   });
 }
 
