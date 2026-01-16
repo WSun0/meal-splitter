@@ -54,7 +54,12 @@ function getItemPortionsForCalculation(item: Item): Array<{ amount: number; assi
     : [];
 
   if (portions.length === 0) {
-    return [{ amount: item.amount, assignments: item.assignments }];
+    const portionCount = quantity;
+    const unitAmount = portionCount > 0 ? item.amount / portionCount : item.amount;
+    return Array.from({ length: portionCount }, () => ({
+      amount: unitAmount,
+      assignments: item.assignments,
+    }));
   }
 
   const portionCount = portions.length || quantity;

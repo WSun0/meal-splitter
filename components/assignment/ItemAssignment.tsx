@@ -259,7 +259,7 @@ export default function ItemAssignment() {
         <section className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-stone-600 uppercase tracking-wide">Buckets</h3>
-            <span className="text-xs text-stone-400">Click ✕ to remove</span>
+            <span className="text-xs text-stone-400">Drag portions between buckets</span>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             {meal.diners.map((diner, dinerIdx) => {
@@ -295,7 +295,13 @@ export default function ItemAssignment() {
                     ) : (
                       <div className="space-y-2">
                         {assignedPortions.map((portion) => (
-                          <div key={`${portion.itemId}-${portion.portionId}`} className="flex items-center justify-between gap-2 rounded-xl border border-stone-200 bg-white px-3 py-2">
+                          <div
+                            key={`${portion.itemId}-${portion.portionId}`}
+                            draggable
+                            onDragStart={handleDragStart(portion.itemId, portion.portionId)}
+                            onDragEnd={handleDragEnd}
+                            className="flex items-center justify-between gap-2 rounded-xl border border-stone-200 bg-white px-3 py-2"
+                          >
                             <div>
                               <p className="text-sm font-semibold text-stone-800">
                                 {portion.itemName} <span className="text-xs text-stone-400">#{portion.portionIndex}</span>
