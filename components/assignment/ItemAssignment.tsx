@@ -255,7 +255,7 @@ export default function ItemAssignment() {
       {/* Divider */}
       <div className="flex items-center gap-4">
         <div className="flex-1 h-px bg-stone-200" />
-        <span className="text-xs text-stone-400 font-medium">↓ Drag items below ↓</span>
+        <span className="text-xs text-stone-400 font-medium">↓ Drag into multiple buckets to split a shared dish ↓</span>
         <div className="flex-1 h-px bg-stone-200" />
       </div>
 
