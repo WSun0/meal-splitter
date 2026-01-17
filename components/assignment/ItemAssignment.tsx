@@ -193,7 +193,7 @@ export default function ItemAssignment() {
         </div>
         <div>
           <h2 className="text-xl font-bold text-stone-800">Assign Items</h2>
-          <p className="text-sm text-stone-500">Drag items into multiple buckets to split costs · Red = unassigned</p>
+          <p className="text-sm text-stone-500">Drag items into buckets · Tap ∀ to split among everyone · Items highlighted in red still need assignment</p>
         </div>
       </div>
 
