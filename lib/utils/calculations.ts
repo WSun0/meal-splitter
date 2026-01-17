@@ -130,13 +130,13 @@ export function calculateMealTotals(meal: Meal): DinerTotal[] {
   }
 
   // Step 3: Calculate global charges
-  const totalFees = receiptMeta.fees.reduce((sum, f) => sum + f, 0);
-  const totalDiscounts = receiptMeta.discounts.reduce((sum, d) => sum + d, 0); // stored as negative
+  // Note: receiptMeta.fees and receiptMeta.discounts are not included as they are
+  // legacy OCR values. Actual fees/discounts should be added via meal.adjustments.
   const hasExplicitTotal = receiptMeta.total > 0;
-  
+
   // Meal-level adjustments (not person-specific)
   const mealLevelAdjustments = adjustments.filter((adj) => adj.scope === 'meal');
-  
+
   // Calculate total meal-level adjustment amount to allocate proportionally
   const mealAdjustmentTotal = mealLevelAdjustments.reduce((sum, adj) => {
     if (adj.allocationRule === 'proportional') {
@@ -144,9 +144,6 @@ export function calculateMealTotals(meal: Meal): DinerTotal[] {
     }
     return sum;
   }, 0);
-
-  // Total global charges = tax + tip + fees + discounts + proportional meal adjustments
-  const totalGlobalCharges = receiptMeta.tax + receiptMeta.tip + totalFees + totalDiscounts + mealAdjustmentTotal;
 
   // Step 4 & 5: Calculate totals for each diner
   const dinerTotals: DinerTotal[] = diners.map((diner) => {
@@ -157,8 +154,8 @@ export function calculateMealTotals(meal: Meal): DinerTotal[] {
     
     const allocatedTax = receiptMeta.tax * proportion;
     const allocatedTip = receiptMeta.tip * proportion;
-    const allocatedFees = totalFees * proportion;
-    const allocatedDiscounts = totalDiscounts * proportion;
+    const allocatedFees = 0; // Legacy OCR field, not used
+    const allocatedDiscounts = 0; // Legacy OCR field, not used
     
     // Allocated meal-level adjustments (proportional ones)
     let allocatedMealAdjustments = mealAdjustmentTotal * proportion;
@@ -178,7 +175,7 @@ export function calculateMealTotals(meal: Meal): DinerTotal[] {
     let totalAdjustments = allocatedMealAdjustments + personAdjustments;
 
     // Provisional total using itemized components
-    let total = itemSubtotal + allocatedTax + allocatedTip + allocatedFees + allocatedDiscounts + totalAdjustments;
+    let total = itemSubtotal + allocatedTax + allocatedTip + totalAdjustments;
 
     // If an explicit receipt total is provided, force totals to reconcile to that value
     if (hasExplicitTotal) {
@@ -287,19 +284,18 @@ export function calculateTotalAdjustments(meal: Meal): number {
 
 /**
  * Calculate the computed total from all bill components.
- * Total = items + tax + tip + fees + discounts + adjustments
- * 
- * This is used instead of the parsed receipt total to avoid OCR errors.
+ * Total = items + tax + tip + adjustments
+ *
+ * Note: receiptMeta.fees and receiptMeta.discounts are not included as they are
+ * legacy OCR values. Actual fees/discounts should be added via meal.adjustments.
  */
 export function calculateComputedTotal(meal: Meal): number {
   const itemsTotal = meal.items.reduce((sum, item) => sum + item.amount, 0);
   const tax = meal.receiptMeta.tax;
   const tip = meal.receiptMeta.tip;
-  const feesTotal = meal.receiptMeta.fees.reduce((sum, f) => sum + f, 0);
-  const discountsTotal = meal.receiptMeta.discounts.reduce((sum, d) => sum + d, 0);
   const adjustmentsTotal = calculateTotalAdjustments(meal);
-  
-  return itemsTotal + tax + tip + feesTotal + discountsTotal + adjustmentsTotal;
+
+  return itemsTotal + tax + tip + adjustmentsTotal;
 }
 
 /**

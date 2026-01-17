@@ -36,11 +36,9 @@ export default function ExtrasManager() {
   if (!meal) return null;
 
   const itemsSubtotal = meal.items.reduce((sum, item) => sum + item.amount, 0);
-  const feesTotal = meal.receiptMeta.fees.reduce((sum, f) => sum + f, 0);
-  const discountsTotal = meal.receiptMeta.discounts.reduce((sum, d) => sum + d, 0);
   const adjustmentsTotal = meal.adjustments.reduce((sum, a) => sum + a.amount, 0);
-  
-  const calculatedTotal = itemsSubtotal + meal.receiptMeta.tax + meal.receiptMeta.tip + feesTotal + discountsTotal + adjustmentsTotal;
+
+  const calculatedTotal = itemsSubtotal + meal.receiptMeta.tax + meal.receiptMeta.tip + adjustmentsTotal;
 
   return (
     <div className="space-y-6">

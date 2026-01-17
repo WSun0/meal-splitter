@@ -210,18 +210,6 @@ export default function MealSummary() {
             <span className="text-stone-500">Tip</span>
             <span className="text-stone-700 font-medium">{formatCurrency(meal.receiptMeta.tip)}</span>
           </div>
-          {meal.receiptMeta.fees.length > 0 && (
-            <div className="flex justify-between text-sm">
-              <span className="text-stone-500">Fees</span>
-              <span className="text-stone-700 font-medium">{formatCurrency(meal.receiptMeta.fees.reduce((s, f) => s + f, 0))}</span>
-            </div>
-          )}
-          {meal.receiptMeta.discounts.length > 0 && (
-            <div className="flex justify-between text-sm">
-              <span className="text-stone-500">Discounts</span>
-              <span className="text-green-600 font-medium">−{formatCurrency(Math.abs(meal.receiptMeta.discounts.reduce((s, d) => s + d, 0)))}</span>
-            </div>
-          )}
           {totalAdjustments !== 0 && (
             <div className="flex justify-between text-sm">
               <span className="text-stone-500">Adjustments</span>
