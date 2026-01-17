@@ -93,7 +93,7 @@ export default function ExtrasManager() {
                 min="0"
                 value={meal.receiptMeta.tax || ''}
                 onChange={(e) => updateReceiptMeta({ tax: parseFloat(e.target.value) || 0 })}
-                className="input text-lg font-semibold flex-1 !pl-0"
+                className="input text-lg font-semibold flex-1 !pl-2"
                 placeholder="0.00"
               />
             </div>
@@ -119,7 +119,7 @@ export default function ExtrasManager() {
                 min="0"
                 value={meal.receiptMeta.tip || ''}
                 onChange={(e) => updateReceiptMeta({ tip: parseFloat(e.target.value) || 0 })}
-                className="input text-lg font-semibold flex-1 !pl-0"
+                className="input text-lg font-semibold flex-1 !pl-2"
                 placeholder="0.00"
               />
             </div>
