@@ -115,6 +115,20 @@ export default function ItemAssignment() {
     );
   };
 
+  const clearPortionAssignments = (itemId: string, portionId: string) => {
+    updateItemPortions(itemId, (portions) =>
+      portions.map((portion) => (portion.id === portionId ? { ...portion, assignments: [] } : portion))
+    );
+  };
+
+  const toggleSplitAll = (itemId: string, portionId: string, isCurrentlyAssignedToAll: boolean) => {
+    if (isCurrentlyAssignedToAll) {
+      clearPortionAssignments(itemId, portionId);
+    } else {
+      assignPortionToAllDiners(itemId, portionId);
+    }
+  };
+
   const portionEntries: PortionEntry[] = [];
 
   meal.items.forEach((item) => {
@@ -193,6 +207,7 @@ export default function ItemAssignment() {
           {portionEntries.map((portion) => {
             const isAssigned = portion.assignments.length > 0;
             const isDragging = draggingPortionId === portion.portionId;
+            const isAssignedToAll = portion.assignments.length === meal.diners.length;
 
             return (
               <div
@@ -233,18 +248,21 @@ export default function ItemAssignment() {
                     {portion.assignments.length}
                   </span>
                 )}
-                {/* Split among all button */}
+                {/* Split among all / Clear all button */}
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    assignPortionToAllDiners(portion.itemId, portion.portionId);
+                    toggleSplitAll(portion.itemId, portion.portionId, isAssignedToAll);
                   }}
-                  className="absolute -top-2 -left-2 w-6 h-6 rounded-full bg-primary-500 text-white text-[10px] font-bold 
-                             flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition-opacity
-                             hover:bg-primary-600 hover:scale-110"
-                  title="Split among all"
+                  className={`absolute -top-2 -left-2 w-6 h-6 rounded-full text-white text-[10px] font-bold
+                             flex items-center justify-center shadow-md transition-all active:scale-95
+                             ${isAssignedToAll
+                               ? 'bg-emerald-500 hover:bg-red-500'
+                               : 'bg-primary-500 hover:bg-primary-600'
+                             }`}
+                  title={isAssignedToAll ? "Clear all assignments" : "Split among all"}
                 >
-                  ∀
+                  {isAssignedToAll ? '✓' : '∀'}
                 </button>
               </div>
             );
