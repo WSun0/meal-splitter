@@ -108,13 +108,13 @@ export function calculatePersonSpecificAdjustments(
 
 /**
  * Calculate totals for all diners with proper proportional allocation.
- * 
+ *
  * Algorithm:
  * 1. Calculate each diner's pre-tax item subtotal
  * 2. Calculate group subtotal S (sum of all diner subtotals)
- * 3. Calculate total global charges (tax + tip + fees + discounts + meal-level adjustments)
- * 4. Allocate global charges proportionally: share[d] = subtotal[d] / S
- * 5. Add person-specific adjustments directly to that person
+ * 3. Allocate tax and tip proportionally: share[d] = subtotal[d] / S
+ * 4. Allocate adjustments based on their rules (proportional, equal, or person-specific)
+ * 5. Total = items + tax + tip + adjustments
  */
 export function calculateMealTotals(meal: Meal): DinerTotal[] {
   const { items, diners, receiptMeta, adjustments } = meal;
@@ -122,73 +122,52 @@ export function calculateMealTotals(meal: Meal): DinerTotal[] {
   // Step 1 & 2: Calculate each diner's subtotal and group subtotal
   const dinerSubtotals = new Map<string, number>();
   let groupSubtotal = 0;
-  
+
   for (const diner of diners) {
     const subtotal = calculateDinerSubtotal(items, diner.id);
     dinerSubtotals.set(diner.id, subtotal);
     groupSubtotal += subtotal;
   }
 
-  // Step 3: Calculate global charges
-  // Note: receiptMeta.fees and receiptMeta.discounts are not included as they are
-  // legacy OCR values. Actual fees/discounts should be added via meal.adjustments.
-  const hasExplicitTotal = receiptMeta.total > 0;
-
-  // Meal-level adjustments (not person-specific)
+  // Separate adjustments by type
   const mealLevelAdjustments = adjustments.filter((adj) => adj.scope === 'meal');
 
-  // Calculate total meal-level adjustment amount to allocate proportionally
-  const mealAdjustmentTotal = mealLevelAdjustments.reduce((sum, adj) => {
-    if (adj.allocationRule === 'proportional') {
-      return sum + adj.amount;
-    }
-    return sum;
-  }, 0);
+  // Calculate proportional meal adjustments total
+  const proportionalAdjustmentsTotal = mealLevelAdjustments
+    .filter((adj) => adj.allocationRule === 'proportional')
+    .reduce((sum, adj) => sum + adj.amount, 0);
 
-  // Step 4 & 5: Calculate totals for each diner
+  // Calculate equal split meal adjustments total
+  const equalSplitAdjustmentsTotal = mealLevelAdjustments
+    .filter((adj) => adj.allocationRule === 'explicit')
+    .reduce((sum, adj) => sum + adj.amount, 0);
+
+  // Step 3, 4, 5: Calculate totals for each diner
   const dinerTotals: DinerTotal[] = diners.map((diner) => {
     const itemSubtotal = dinerSubtotals.get(diner.id) || 0;
-    
-    // Proportional share of global charges
+
+    // Proportional share based on item spending
     const proportion = groupSubtotal > 0 ? itemSubtotal / groupSubtotal : 0;
-    
+
+    // Tax and tip are always proportional
     const allocatedTax = receiptMeta.tax * proportion;
     const allocatedTip = receiptMeta.tip * proportion;
-    const allocatedFees = 0; // Legacy OCR field, not used
-    const allocatedDiscounts = 0; // Legacy OCR field, not used
-    
-    // Allocated meal-level adjustments (proportional ones)
-    let allocatedMealAdjustments = mealAdjustmentTotal * proportion;
-    
-    // Add explicit/equal split adjustments
-    for (const adj of mealLevelAdjustments) {
-      if (adj.allocationRule === 'explicit') {
-        // For "explicit" rule with meal scope, treat as equal split among all diners
-        allocatedMealAdjustments += adj.amount / diners.length;
-      }
-    }
-    
-    // Person-specific adjustments
+
+    // Calculate adjustments for this diner
+    // 1. Proportional meal adjustments
+    const proportionalShare = proportionalAdjustmentsTotal * proportion;
+
+    // 2. Equal split meal adjustments
+    const equalShare = diners.length > 0 ? equalSplitAdjustmentsTotal / diners.length : 0;
+
+    // 3. Person-specific adjustments
     const personAdjustments = calculatePersonSpecificAdjustments(adjustments, diner.id);
-    
-    // Total adjustments for this diner (will include any explicit equal split + person-specific)
-    let totalAdjustments = allocatedMealAdjustments + personAdjustments;
 
-    // Provisional total using itemized components
-    let total = itemSubtotal + allocatedTax + allocatedTip + totalAdjustments;
+    // Total adjustments for this diner
+    const totalAdjustments = proportionalShare + equalShare + personAdjustments;
 
-    // If an explicit receipt total is provided, force totals to reconcile to that value
-    if (hasExplicitTotal) {
-      // Target total for this diner based on share of explicit receipt total
-      const targetTotalForDiner = proportion * receiptMeta.total;
-
-      // Remainder captures any mismatch between itemized breakdown and explicit total (e.g., service fees not itemized)
-      const remainder = targetTotalForDiner - total;
-
-      // Add the remainder to adjustments (displayed as "Other") so components sum exactly to target
-      totalAdjustments += remainder;
-      total = targetTotalForDiner;
-    }
+    // Total = items + tax + tip + adjustments
+    const total = itemSubtotal + allocatedTax + allocatedTip + totalAdjustments;
 
     return {
       dinerId: diner.id,
@@ -196,8 +175,8 @@ export function calculateMealTotals(meal: Meal): DinerTotal[] {
       itemSubtotal,
       allocatedTax,
       allocatedTip,
-      allocatedFees,
-      allocatedDiscounts,
+      allocatedFees: 0, // Legacy field, kept for type compatibility
+      allocatedDiscounts: 0, // Legacy field, kept for type compatibility
       adjustments: totalAdjustments,
       total,
     };
@@ -349,20 +328,21 @@ export function validateSubtotalReconciliation(meal: Meal): number {
 
 /**
  * Generate complete meal summary with reconciled totals.
- * 
- * The total is computed from items + tax + tip + fees + discounts + adjustments
- * rather than using the parsed receipt total, to avoid OCR parsing errors.
- * 
+ *
+ * The total is computed from items + tax + tip + adjustments.
+ * We use the computed total (not parsed receipt total) to avoid OCR errors.
+ *
  * The algorithm ensures:
- * 1. Global charges are allocated proportionally to each diner's item subtotal
- * 2. Rounding is handled fairly using the largest remainder method
- * 3. Sum of all diner totals exactly equals the computed total
+ * 1. Tax and tip are allocated proportionally to each diner's item subtotal
+ * 2. Adjustments follow their allocation rules (proportional, equal, or person-specific)
+ * 3. Rounding is handled fairly using the largest remainder method
+ * 4. Sum of all diner totals exactly equals the computed total
  */
 export function generateMealSummary(meal: Meal): MealSummary {
   const dinerTotals = calculateMealTotals(meal);
-  
-  // If explicit receipt total is provided, use it; otherwise compute from components
-  const targetTotal = meal.receiptMeta.total > 0 ? meal.receiptMeta.total : calculateComputedTotal(meal);
+
+  // Always use computed total (items + tax + tip + adjustments)
+  const targetTotal = calculateComputedTotal(meal);
 
   // Apply largest remainder rounding to ensure exact reconciliation
   const reconciledTotals = reconcileRounding(dinerTotals, targetTotal);
