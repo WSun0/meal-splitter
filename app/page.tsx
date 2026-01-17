@@ -5,7 +5,6 @@ import { MealProvider, useMeal } from '@/lib/store/meal-store';
 import Landing from '@/components/Landing';
 import DinersManagement from '@/components/meal/DinersManagement';
 import ReceiptUpload from '@/components/receipt/ReceiptUpload';
-import ManualEntry from '@/components/receipt/ManualEntry';
 import ItemsReview from '@/components/receipt/ItemsReview';
 import ItemAssignment from '@/components/assignment/ItemAssignment';
 import ExtrasManager from '@/components/summary/ExtrasManager';
@@ -185,12 +184,11 @@ function MealSplitApp() {
                       </span>
                     </button>
                     <button
-                      onClick={() => setReceiptMode('manual')}
-                      className={`flex-1 py-3 px-4 rounded-2xl font-semibold text-sm transition-all duration-200 ${
-                        receiptMode === 'manual'
-                          ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-md'
-                          : 'text-stone-500 hover:bg-stone-100'
-                      }`}
+                      onClick={() => {
+                        setReceiptMode('manual');
+                        setCurrentStep('items');
+                      }}
+                      className="flex-1 py-3 px-4 rounded-2xl font-semibold text-sm transition-all duration-200 text-stone-500 hover:bg-stone-100"
                     >
                       <span className="flex items-center justify-center gap-2">
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -202,14 +200,10 @@ function MealSplitApp() {
                   </div>
                 </div>
 
-                {receiptMode === 'upload' ? (
-                  <ReceiptUpload 
-                    onParseSuccess={handleOCRSuccess}
-                    ocr={ocr}
-                  />
-                ) : (
-                  <ManualEntry />
-                )}
+                <ReceiptUpload
+                  onParseSuccess={handleOCRSuccess}
+                  ocr={ocr}
+                />
 
                 {canProceedFromItems && (
                   <div className="text-center space-y-3">
@@ -227,7 +221,6 @@ function MealSplitApp() {
             {currentStep === 'items' && (
               <>
                 <ItemsReview />
-                {receiptMode === 'manual' && <ManualEntry />}
                 {canProceedFromItems && (
                   <div className="text-center">
                     {canProceedFromDiners ? (
