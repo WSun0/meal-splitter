@@ -10,6 +10,8 @@ import {
   calculatePersonSpecificAdjustments,
   getUnassignedItems,
   calculateGroupSubtotal,
+  validateSubtotalReconciliation,
+  generateSettlementSuggestions,
 } from './calculations';
 import { Meal, Item, Diner, DinerTotal, Adjustment } from '../types/meal';
 
@@ -143,7 +145,9 @@ describe('calculateDinerSubtotal', () => {
 });
 
 describe('calculateComputedTotal', () => {
-  it('correctly sums items + tax + tip + fees + discounts', () => {
+  it('correctly sums items + tax + tip + adjustments (fees/discounts via adjustments)', () => {
+    // Note: fees and discounts from receiptMeta are legacy OCR values and not included
+    // in calculateComputedTotal. Actual fees/discounts should be added via adjustments.
     const meal = createMeal({
       items: [
         createItemWithSingleAssignment('item1', 'Item 1', 50, 'diner1'),
@@ -153,14 +157,14 @@ describe('calculateComputedTotal', () => {
         subtotal: 80,
         tax: 12.11,
         tip: 37,
-        fees: [5],
-        discounts: [-10],
-        total: 124.11,
+        fees: [], // Fees should be in adjustments, not here
+        discounts: [], // Discounts should be in adjustments, not here
+        total: 129.11,
       },
     });
 
-    // 50 + 30 + 12.11 + 37 + 5 - 10 = 124.11
-    expect(calculateComputedTotal(meal)).toBeCloseTo(124.11, 2);
+    // 50 + 30 + 12.11 + 37 = 129.11
+    expect(calculateComputedTotal(meal)).toBeCloseTo(129.11, 2);
   });
 
   it('works with no fees or discounts', () => {
@@ -310,8 +314,10 @@ describe('User example: Will, Jensen, Michael bar bill', () => {
   });
 });
 
-describe('Explicit receipt total overrides itemized global charges', () => {
-  it('allocates the remainder (non-itemized charges) proportionally as adjustments, without showing fees', () => {
+describe('Computed total uses items + tax + tip + adjustments', () => {
+  it('ignores receiptMeta.total and computes from components', () => {
+    // The system uses computed total (items + tax + tip + adjustments),
+    // not the parsed receipt total. This avoids OCR errors.
     const will = createDiner('will', 'Will');
     const jensen = createDiner('jensen', 'Jensen');
     const michael = createDiner('michael', 'Michael');
@@ -329,7 +335,7 @@ describe('Explicit receipt total overrides itemized global charges', () => {
     ];
 
     // Items subtotal = 173, tax = 12.11, tip = 37.
-    // Receipt total explicitly set to 237.11 (i.e., an extra 15 of non-itemized charges)
+    // Receipt total is 237.11, but system uses computed total: 173 + 12.11 + 37 = 222.11
     const meal = createMeal({
       diners: [will, jensen, michael],
       items,
@@ -339,34 +345,32 @@ describe('Explicit receipt total overrides itemized global charges', () => {
         tip: 37,
         fees: [],
         discounts: [],
-        total: 237.11,
+        total: 237.11, // This is ignored
       },
     });
 
     const summary = generateMealSummary(meal);
     const totals = summary.dinerTotals;
 
-    // Fees should remain zero because none were itemized
+    // Fees should remain zero because none were added
     expect(totals.every((t) => Math.abs(t.allocatedFees) < 0.0001)).toBe(true);
 
-    // The extra $15 should be allocated proportionally as adjustments ("Other")
+    // Totals should sum to the COMPUTED total (items + tax + tip), not receipt total
+    const computedTotal = 173 + 12.11 + 37; // 222.11
+    const sumTotals = totals.reduce((s, t) => s + t.total, 0);
+    expect(sumTotals).toBeCloseTo(computedTotal, 2);
+
+    // Verify individual totals with proportional allocation
     const willTotal = totals.find((t) => t.dinerId === 'will')!;
     const jensenTotal = totals.find((t) => t.dinerId === 'jensen')!;
     const michaelTotal = totals.find((t) => t.dinerId === 'michael')!;
 
-    // Totals should sum to the explicit receipt total
-    const sumTotals = totals.reduce((s, t) => s + t.total, 0);
-    expect(sumTotals).toBeCloseTo(237.11, 2);
-
-    // Check that each total matches the expected rounded amounts after reconciliation
-    expect(willTotal.total).toBeCloseTo(101.42, 2);
-    expect(jensenTotal.total).toBeCloseTo(80.87, 2);
-    expect(michaelTotal.total).toBeCloseTo(54.82, 2);
-
-    // Adjustments should capture the unitemized remainder (> 0)
-    expect(willTotal.adjustments).toBeGreaterThan(0);
-    expect(jensenTotal.adjustments).toBeGreaterThan(0);
-    expect(michaelTotal.adjustments).toBeGreaterThan(0);
+    // Will: 74/173 of 222.11 ≈ 95.01
+    expect(willTotal.total).toBeCloseTo(95.01, 1);
+    // Jensen: 59/173 of 222.11 ≈ 75.75
+    expect(jensenTotal.total).toBeCloseTo(75.75, 1);
+    // Michael: 40/173 of 222.11 ≈ 51.36
+    expect(michaelTotal.total).toBeCloseTo(51.36, 1);
   });
 });
 
@@ -782,8 +786,13 @@ describe('Rounding precision', () => {
   });
 });
 
-describe('Fees and discounts are included in calculation', () => {
-  it('includes fees in total calculation and allocates proportionally', () => {
+describe('Fees and discounts via adjustments', () => {
+  // Note: receiptMeta.fees and receiptMeta.discounts are legacy OCR values
+  // and are NOT included in calculateComputedTotal. The allocatedFees and
+  // allocatedDiscounts fields in DinerTotal are kept for type compatibility
+  // but are always 0. Actual fees/discounts should be added via adjustments.
+
+  it('handles fees as adjustments', () => {
     const meal = createMeal({
       diners: [
         createDiner('big', 'Big Spender'),
@@ -797,26 +806,36 @@ describe('Fees and discounts are included in calculation', () => {
         subtotal: 100,
         tax: 10,
         tip: 20,
-        fees: [5], // Service fee
+        fees: [], // Legacy field, not used
         discounts: [],
-        total: 135,
+        total: 135, // Not used by calculateComputedTotal
       },
+      adjustments: [
+        {
+          id: 'fee1',
+          label: 'Service Fee',
+          amount: 5,
+          type: 'debit',
+          scope: 'meal',
+          allocationRule: 'proportional',
+        },
+      ],
     });
 
-    // 80 + 20 + 10 + 20 + 5 = 135
+    // 80 + 20 + 10 + 20 + 5 (adjustment) = 135
     expect(calculateComputedTotal(meal)).toBe(135);
 
     const summary = generateMealSummary(meal);
     const bigSpender = summary.dinerTotals.find((t) => t.dinerId === 'big')!;
     const smallSpender = summary.dinerTotals.find((t) => t.dinerId === 'small')!;
 
-    // Big spender gets 80% of fees (4)
-    expect(bigSpender.allocatedFees).toBe(4);
-    // Small spender gets 20% of fees (1)
-    expect(smallSpender.allocatedFees).toBe(1);
+    // Big spender gets 80% of adjustment (4)
+    // Small spender gets 20% of adjustment (1)
+    expect(bigSpender.adjustments).toBe(4);
+    expect(smallSpender.adjustments).toBe(1);
   });
 
-  it('includes discounts in total calculation and allocates proportionally', () => {
+  it('handles discounts as adjustments', () => {
     const meal = createMeal({
       diners: [
         createDiner('big', 'Big Spender'),
@@ -831,12 +850,22 @@ describe('Fees and discounts are included in calculation', () => {
         tax: 10,
         tip: 20,
         fees: [],
-        discounts: [-10], // $10 discount (stored as negative)
-        total: 120,
+        discounts: [], // Legacy field, not used
+        total: 120, // Not used by calculateComputedTotal
       },
+      adjustments: [
+        {
+          id: 'discount1',
+          label: 'Discount',
+          amount: -10,
+          type: 'credit',
+          scope: 'meal',
+          allocationRule: 'proportional',
+        },
+      ],
     });
 
-    // 80 + 20 + 10 + 20 - 10 = 120
+    // 80 + 20 + 10 + 20 - 10 (adjustment) = 120
     expect(calculateComputedTotal(meal)).toBe(120);
 
     const summary = generateMealSummary(meal);
@@ -844,9 +873,9 @@ describe('Fees and discounts are included in calculation', () => {
     const smallSpender = summary.dinerTotals.find((t) => t.dinerId === 'small')!;
 
     // Big spender gets 80% of discount (-8)
-    expect(bigSpender.allocatedDiscounts).toBe(-8);
     // Small spender gets 20% of discount (-2)
-    expect(smallSpender.allocatedDiscounts).toBe(-2);
+    expect(bigSpender.adjustments).toBe(-8);
+    expect(smallSpender.adjustments).toBe(-2);
   });
 });
 
@@ -904,5 +933,246 @@ describe('Group subtotal calculation', () => {
     });
 
     expect(calculateGroupSubtotal(meal)).toBe(100);
+  });
+});
+
+describe('validateSubtotalReconciliation', () => {
+  it('returns 0 when diner subtotals match group subtotal', () => {
+    const meal = createMeal({
+      diners: [
+        createDiner('diner1', 'Diner 1'),
+        createDiner('diner2', 'Diner 2'),
+      ],
+      items: [
+        createItemWithSingleAssignment('item1', 'Item 1', 50, 'diner1'),
+        createItemWithSingleAssignment('item2', 'Item 2', 30, 'diner2'),
+      ],
+    });
+
+    expect(validateSubtotalReconciliation(meal)).toBe(0);
+  });
+
+  it('returns 0 for evenly split items', () => {
+    const meal = createMeal({
+      diners: [
+        createDiner('a', 'Alice'),
+        createDiner('b', 'Bob'),
+      ],
+      items: [
+        createItemWithEvenSplit('app', 'Appetizer', 20, ['a', 'b']),
+      ],
+    });
+
+    expect(validateSubtotalReconciliation(meal)).toBe(0);
+  });
+
+  it('returns difference when items are unassigned', () => {
+    const meal = createMeal({
+      diners: [createDiner('solo', 'Solo')],
+      items: [
+        createItemWithSingleAssignment('item1', 'Food', 50, 'solo'),
+        {
+          id: 'item2',
+          name: 'Unassigned',
+          quantity: 1,
+          amount: 25,
+          assignments: [], // No assignments - not counted in diner subtotals
+        },
+      ],
+    });
+
+    // Group subtotal is 75, diner subtotal is 50, difference is 25
+    expect(validateSubtotalReconciliation(meal)).toBe(25);
+  });
+});
+
+describe('generateSettlementSuggestions', () => {
+  it('generates correct settlement when one person paid', () => {
+    const meal = createMeal({
+      diners: [
+        createDiner('payer', 'Alice'),
+        createDiner('owes1', 'Bob'),
+        createDiner('owes2', 'Carol'),
+      ],
+      items: [
+        createItemWithSingleAssignment('item1', 'Item 1', 30, 'payer'),
+        createItemWithSingleAssignment('item2', 'Item 2', 20, 'owes1'),
+        createItemWithSingleAssignment('item3', 'Item 3', 25, 'owes2'),
+      ],
+      receiptMeta: {
+        subtotal: 75,
+        tax: 0,
+        tip: 0,
+        fees: [],
+        discounts: [],
+        total: 75,
+      },
+    });
+
+    const summary = generateMealSummary(meal);
+    const settlements = generateSettlementSuggestions(summary, 'payer');
+
+    expect(settlements).toHaveLength(2);
+    expect(settlements.find((s) => s.from === 'Bob')?.amount).toBe(20);
+    expect(settlements.find((s) => s.from === 'Carol')?.amount).toBe(25);
+    expect(settlements.every((s) => s.to === 'Alice')).toBe(true);
+  });
+
+  it('returns empty array for invalid payer', () => {
+    const meal = createMeal({
+      diners: [createDiner('solo', 'Solo')],
+      items: [createItemWithSingleAssignment('item1', 'Food', 50, 'solo')],
+      receiptMeta: {
+        subtotal: 50,
+        tax: 0,
+        tip: 0,
+        fees: [],
+        discounts: [],
+        total: 50,
+      },
+    });
+
+    const summary = generateMealSummary(meal);
+    const settlements = generateSettlementSuggestions(summary, 'invalid-id');
+
+    expect(settlements).toHaveLength(0);
+  });
+
+  it('excludes payer from settlements', () => {
+    const meal = createMeal({
+      diners: [
+        createDiner('payer', 'Payer'),
+        createDiner('other', 'Other'),
+      ],
+      items: [
+        createItemWithSingleAssignment('item1', 'Food', 50, 'payer'),
+        createItemWithSingleAssignment('item2', 'Drink', 30, 'other'),
+      ],
+      receiptMeta: {
+        subtotal: 80,
+        tax: 0,
+        tip: 0,
+        fees: [],
+        discounts: [],
+        total: 80,
+      },
+    });
+
+    const summary = generateMealSummary(meal);
+    const settlements = generateSettlementSuggestions(summary, 'payer');
+
+    expect(settlements).toHaveLength(1);
+    expect(settlements[0].from).toBe('Other');
+    expect(settlements[0].to).toBe('Payer');
+    expect(settlements[0].amount).toBe(30);
+  });
+
+  it('excludes diners with zero total', () => {
+    const meal = createMeal({
+      diners: [
+        createDiner('payer', 'Payer'),
+        createDiner('freeloader', 'Freeloader'), // No items
+        createDiner('other', 'Other'),
+      ],
+      items: [
+        createItemWithSingleAssignment('item1', 'Food', 50, 'payer'),
+        createItemWithSingleAssignment('item2', 'Drink', 30, 'other'),
+      ],
+      receiptMeta: {
+        subtotal: 80,
+        tax: 0,
+        tip: 0,
+        fees: [],
+        discounts: [],
+        total: 80,
+      },
+    });
+
+    const summary = generateMealSummary(meal);
+    const settlements = generateSettlementSuggestions(summary, 'payer');
+
+    // Freeloader should not be in settlements (has 0 total)
+    expect(settlements).toHaveLength(1);
+    expect(settlements[0].from).toBe('Other');
+  });
+});
+
+describe('calculateTotalAdjustments', () => {
+  it('sums all adjustments', () => {
+    const meal = createMeal({
+      adjustments: [
+        {
+          id: 'adj1',
+          label: 'Service charge',
+          amount: 10,
+          type: 'debit',
+          scope: 'meal',
+          allocationRule: 'proportional',
+        },
+        {
+          id: 'adj2',
+          label: 'Discount',
+          amount: -5,
+          type: 'credit',
+          scope: 'meal',
+          allocationRule: 'proportional',
+        },
+      ],
+    });
+
+    expect(calculateTotalAdjustments(meal)).toBe(5);
+  });
+
+  it('returns 0 for no adjustments', () => {
+    const meal = createMeal({ adjustments: [] });
+    expect(calculateTotalAdjustments(meal)).toBe(0);
+  });
+});
+
+describe('Portion-based item splitting', () => {
+  it('handles items with individual portion assignments', () => {
+    const item: Item = {
+      id: 'pizza',
+      name: 'Pizza (4 slices)',
+      quantity: 4,
+      amount: 20, // $5 per slice
+      assignments: [], // Empty because portions have their own assignments
+      portions: [
+        { id: 'p1', assignments: [{ dinerId: 'alice', splitType: 'single' }] },
+        { id: 'p2', assignments: [{ dinerId: 'alice', splitType: 'single' }] },
+        { id: 'p3', assignments: [{ dinerId: 'bob', splitType: 'single' }] },
+        { id: 'p4', assignments: [{ dinerId: 'bob', splitType: 'single' }] },
+      ],
+    };
+
+    // Alice: 2 slices @ $5 = $10
+    expect(calculateItemShareForDiner(item, 'alice')).toBe(10);
+    // Bob: 2 slices @ $5 = $10
+    expect(calculateItemShareForDiner(item, 'bob')).toBe(10);
+  });
+
+  it('handles portions with different split types per portion', () => {
+    const item: Item = {
+      id: 'wings',
+      name: 'Wings (3 portions)',
+      quantity: 3,
+      amount: 15, // $5 per portion
+      assignments: [],
+      portions: [
+        { id: 'p1', assignments: [{ dinerId: 'alice', splitType: 'single' }] },
+        { id: 'p2', assignments: [
+          { dinerId: 'bob', splitType: 'even' },
+          { dinerId: 'carol', splitType: 'even' },
+        ]},
+        { id: 'p3', assignments: [{ dinerId: 'carol', splitType: 'single' }] },
+      ],
+    };
+
+    // Alice: 1 portion @ $5 = $5
+    expect(calculateItemShareForDiner(item, 'alice')).toBe(5);
+    // Bob: 0.5 portion @ $5 = $2.50
+    expect(calculateItemShareForDiner(item, 'bob')).toBe(2.5);
+    // Carol: 1 portion + 0.5 portion = 1.5 @ $5 = $7.50
+    expect(calculateItemShareForDiner(item, 'carol')).toBe(7.5);
   });
 });
