@@ -2,6 +2,8 @@
 
 Stop doing mental math after dinner. Upload a receipt photo or enter items manually, assign who had what, and get instant per-person totals with tax and tip split fairly.
 
+https://meal-splitter-hazel.vercel.app
+
 ## What It Does
 
 1. **Add your diners** - Who's splitting the bill?
