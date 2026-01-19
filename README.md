@@ -1,28 +1,15 @@
 # Meal Splitter
 
-Stop doing mental math after dinner. Upload a receipt photo or enter items manually, assign who had what, and get instant per-person totals with tax and tip split fairly.
+Seamlessly split a meal among multiple diners. Handles the annoying stuff automatically: proportional tax and tip splitting, uneven dish prices, and making sure the math actually adds up.
 
 https://meal-splitter-hazel.vercel.app
 
 ## What It Does
 
-1. **Add your diners** - Who's splitting the bill?
-2. **Input the receipt** - Snap a photo or type it in
-3. **Assign items** - Drag items to people, split shared dishes however you want
-4. **Get the breakdown** - Each person's total, ready to Venmo
-
-Handles the annoying stuff automatically: tax allocation, tip splitting, uneven shares, and making sure the math actually adds up to the penny.
-
-## Quick Start
-
-```bash
-npm install
-npm run dev
-```
-
-Open [localhost:3000](http://localhost:3000) and start splitting.
-
----
+1. **Add your items** - Upload a photo of your receipt and complete in-house preprocessing for best parsing results, or manually add your items
+2. **Add your diners** - People who are splitting the bill
+3. **Assign items** - Drag items to their respective consumers, splitting shared dishes however you want
+4. **Get the breakdown** - Each person's total
 
 <details>
 <summary><strong>Technical Details</strong></summary>
