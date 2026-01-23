@@ -1,8 +1,15 @@
 /**
- * Generate a unique ID
+ * Generate a unique ID using cryptographically secure random values
  */
 export function generateId(): string {
-  return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  // Use crypto.getRandomValues for secure randomness
+  const array = new Uint8Array(8);
+  crypto.getRandomValues(array);
+  const randomPart = Array.from(array)
+    .map(b => b.toString(36).padStart(2, '0'))
+    .join('')
+    .slice(0, 12);
+  return `${Date.now()}-${randomPart}`;
 }
 
 /**
