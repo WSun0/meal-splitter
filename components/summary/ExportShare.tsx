@@ -67,10 +67,20 @@ export default function ExportShare() {
     }
   };
 
+  // Sanitize string for CSV to prevent formula injection
+  const sanitizeForCSV = (value: string): string => {
+    // If the value starts with characters that could be interpreted as formulas, prefix with a single quote
+    if (/^[=+\-@\t\r]/.test(value)) {
+      return `'${value}`;
+    }
+    // Escape double quotes by doubling them
+    return value.replace(/"/g, '""');
+  };
+
   const handleDownloadCSV = () => {
     let csv = 'Diner,Items,Tax,Tip,Fees,Discounts,Adjustments,Total\n';
     summary.dinerTotals.forEach((dt) => {
-      csv += `"${dt.dinerName}",${dt.itemSubtotal.toFixed(2)},${dt.allocatedTax.toFixed(2)},${dt.allocatedTip.toFixed(2)},${dt.allocatedFees.toFixed(2)},${dt.allocatedDiscounts.toFixed(2)},${dt.adjustments.toFixed(2)},${dt.total.toFixed(2)}\n`;
+      csv += `"${sanitizeForCSV(dt.dinerName)}",${dt.itemSubtotal.toFixed(2)},${dt.allocatedTax.toFixed(2)},${dt.allocatedTip.toFixed(2)},${dt.allocatedFees.toFixed(2)},${dt.allocatedDiscounts.toFixed(2)},${dt.adjustments.toFixed(2)},${dt.total.toFixed(2)}\n`;
     });
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
