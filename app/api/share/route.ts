@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { WireSchema } from '@/lib/utils/share';
 import { allowShareWrite, getRedis, saveSplit } from '@/lib/server/share-store';
-import { getClientIP } from '@/lib/utils/server-rate-limiter';
 
 export const runtime = 'nodejs';
 
 const MAX_BODY_BYTES = 32 * 1024;
+
+function clientIP(req: NextRequest): string {
+  // Vercel sets x-forwarded-for; the first entry is the client.
+  return req.headers.get('x-forwarded-for')?.split(',')[0].trim() || req.headers.get('x-real-ip') || 'unknown';
+}
 
 /**
  * POST /api/share  body: wire-format split  ->  { id }
@@ -35,7 +39,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    if (!(await allowShareWrite(await getClientIP()))) {
+    if (!(await allowShareWrite(clientIP(req)))) {
       return NextResponse.json({ error: 'Too many links, try again later' }, { status: 429 });
     }
     const id = await saveSplit(parsed.data);

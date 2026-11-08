@@ -28,7 +28,6 @@ export interface Item {
   amount: number; // total amount for this item (qty * unit price)
   assignments: Assignment[];
   portions?: ItemPortion[];
-  isUncertain?: boolean; // flag for OCR uncertainty
 }
 
 export type AdjustmentScope = 'meal' | 'person';
@@ -56,14 +55,6 @@ export interface ReceiptMeta {
   fees: number[];
   discounts: number[];
   total: number;
-}
-
-export interface OCRResult {
-  items: Omit<Item, 'id' | 'assignments' | 'portions'>[];
-  receiptMeta: Partial<ReceiptMeta>;
-  confidence: number; // 0-1
-  rawText?: string;
-  error?: string;
 }
 
 export interface Meal {

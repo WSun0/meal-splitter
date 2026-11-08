@@ -1,23 +1,19 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { MealProvider, useMeal } from '@/lib/store/meal-store';
 import Landing from '@/components/Landing';
 import DinersManagement from '@/components/meal/DinersManagement';
-import ReceiptUpload from '@/components/receipt/ReceiptUpload';
 import ItemsReview from '@/components/receipt/ItemsReview';
 import ItemAssignment from '@/components/assignment/ItemAssignment';
 import ExtrasManager from '@/components/summary/ExtrasManager';
 import MealSummary from '@/components/summary/MealSummary';
 import ExportShare from '@/components/summary/ExportShare';
-import { OCRResult } from '@/lib/types/meal';
-import { useClientOCR } from '@/lib/hooks/useClientOCR';
 import { todayLocalISODate } from '@/lib/utils/helpers';
 
-type Step = 'diners' | 'receipt' | 'items' | 'assign' | 'extras' | 'summary';
+type Step = 'items' | 'diners' | 'assign' | 'extras' | 'summary';
 
 const steps: { id: Step; label: string }[] = [
-  { id: 'receipt', label: 'Receipt' },
   { id: 'items', label: 'Items' },
   { id: 'diners', label: 'Diners' },
   { id: 'assign', label: 'Assign' },
@@ -26,46 +22,21 @@ const steps: { id: Step; label: string }[] = [
 ];
 
 function MealSplitApp() {
-  const { meal, resetMeal, createMeal, addItem, updateReceiptMeta } = useMeal();
-  const [currentStep, setCurrentStep] = useState<Step>('receipt');
-  const [receiptMode, setReceiptMode] = useState<'upload' | 'manual'>('upload');
-  
-  // Client-side OCR hook
-  const ocr = useClientOCR();
+  const { meal, resetMeal, createMeal, savedDraft, resumeDraft, discardDraft } = useMeal();
+  const [currentStep, setCurrentStep] = useState<Step>('items');
 
-  const handleModeSelection = (mode: 'upload' | 'manual') => {
+  const handleStart = () => {
     createMeal('New Meal', undefined, todayLocalISODate());
-    setReceiptMode(mode);
-    setCurrentStep('receipt');
-    
-    // Preload OCR engine when user selects upload mode
-    if (mode === 'upload') {
-      ocr.preload();
-    }
-  };
-  
-  // Also preload when switching to upload mode from manual
-  useEffect(() => {
-    if (receiptMode === 'upload' && meal) {
-      ocr.preload();
-    }
-  }, [receiptMode, meal]);
-
-  const handleOCRSuccess = (result: OCRResult) => {
-    result.items.forEach((item) => {
-      addItem({ ...item, assignments: [] });
-    });
-
-    updateReceiptMeta({
-      subtotal: result.receiptMeta.subtotal || 0,
-      tax: result.receiptMeta.tax || 0,
-      tip: result.receiptMeta.tip || 0,
-      fees: result.receiptMeta.fees || [],
-      discounts: result.receiptMeta.discounts || [],
-      total: result.receiptMeta.total || 0,
-    });
-
     setCurrentStep('items');
+  };
+
+  const handleResume = () => {
+    const draft = savedDraft?.meal;
+    const assigned = draft?.items.some((item) =>
+      item.portions?.length ? item.portions.some((p) => p.assignments.length > 0) : item.assignments.length > 0
+    );
+    resumeDraft();
+    setCurrentStep(!draft?.items.length ? 'items' : !draft.diners.length ? 'diners' : assigned ? 'summary' : 'assign');
   };
 
   const canProceedFromDiners = meal && meal.diners.length > 0;
@@ -161,64 +132,10 @@ function MealSplitApp() {
 
       {/* Main content */}
       {!meal ? (
-        <Landing onSelectMode={handleModeSelection} />
+        <Landing onStart={handleStart} draft={savedDraft} onResume={handleResume} onDiscard={discardDraft} />
       ) : (
         <main className="max-w-3xl mx-auto px-4 py-8">
           <div className="space-y-6 animate-fade-in">
-            {currentStep === 'receipt' && (
-              <>
-                <div className="card p-1.5">
-                  <div className="flex gap-1">
-                    <button
-                      onClick={() => setReceiptMode('upload')}
-                      className={`flex-1 py-3 px-4 rounded-2xl font-semibold text-sm transition-all duration-200 ${
-                        receiptMode === 'upload'
-                          ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-md'
-                          : 'text-stone-500 hover:bg-stone-100'
-                      }`}
-                    >
-                      <span className="flex items-center justify-center gap-2">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
-                        Upload Photo
-                      </span>
-                    </button>
-                    <button
-                      onClick={() => {
-                        setReceiptMode('manual');
-                        setCurrentStep('items');
-                      }}
-                      className="flex-1 py-3 px-4 rounded-2xl font-semibold text-sm transition-all duration-200 text-stone-500 hover:bg-stone-100"
-                    >
-                      <span className="flex items-center justify-center gap-2">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
-                        Manual Entry
-                      </span>
-                    </button>
-                  </div>
-                </div>
-
-                <ReceiptUpload
-                  onParseSuccess={handleOCRSuccess}
-                  ocr={ocr}
-                />
-
-                {canProceedFromItems && (
-                  <div className="text-center space-y-3">
-                    <button onClick={() => setCurrentStep('items')} className="btn-primary text-base py-3 px-8">
-                      Continue to Items Review
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                      </svg>
-                    </button>
-                  </div>
-                )}
-              </>
-            )}
-
             {currentStep === 'items' && (
               <>
                 <ItemsReview />

@@ -6,34 +6,36 @@ https://meal-splitter-hazel.vercel.app
 
 ## What It Does
 
-1. **Add your items** - Upload a photo of your receipt and complete in-house preprocessing for best parsing results, or manually add your items
+1. **Add your items** - Type in each item and its price from the receipt
 2. **Add your diners** - People who are splitting the bill
 3. **Assign items** - Drag items to their respective consumers, splitting shared dishes however you want
-4. **Get the breakdown** - Each person's total
+4. **Get the breakdown** - Each person's total, plus a short link to share with everyone
 
 <details>
 <summary><strong>Technical Details</strong></summary>
 
 ## Architecture Overview
 
-Built with Next.js 16 (App Router), TypeScript, and Tailwind CSS. State management via React Context with localStorage persistence. OCR powered by Google Cloud Vision API with server-side image preprocessing.
+Built with Next.js 16 (App Router), TypeScript, and Tailwind CSS. State management via React Context with localStorage persistence (an unfinished meal from the last 24 hours can be resumed from the landing page). Share links are stored in Upstash Redis.
 
 ```
 meal-splitter/
 ├── app/
-│   ├── api/ocr/route.ts     # OCR endpoint with rate limiting
-│   ├── page.tsx             # Landing page
-│   └── split/page.tsx       # Main splitting interface
+│   ├── api/share/route.ts   # Stores a shared split, returns a short id
+│   ├── page.tsx             # Landing page + splitting flow
+│   ├── s/[id]/page.tsx      # Short share links
+│   └── split/page.tsx       # Self-contained / legacy share links
 ├── components/
 │   ├── assignment/          # Drag-and-drop item assignment
 │   ├── meal/                # Meal creation, diner management
-│   ├── receipt/             # Photo upload, manual entry, item review
+│   ├── receipt/             # Item entry and review
+│   ├── share/               # Shared split view
 │   └── summary/             # Final breakdown, adjustments, export
 └── lib/
-    ├── hooks/               # Custom React hooks
+    ├── server/              # Share link storage (Upstash Redis)
     ├── store/               # React Context state management
     ├── types/               # TypeScript type definitions
-    └── utils/               # Calculations, parsing, image processing
+    └── utils/               # Calculations, share encoding
 ```
 
 ---
@@ -77,73 +79,6 @@ interface Adjustment {
   personId?: string;                 // Required if scope is 'person'
 }
 ```
-
----
-
-## OCR Pipeline
-
-### Image Preprocessing (Server-side with Sharp)
-
-Before sending to Google Cloud Vision, images go through a preprocessing pipeline to maximize OCR accuracy:
-
-1. **Grayscale conversion** - Removes color noise
-2. **Auto-resize** - Caps at 2000px on longest side for performance
-3. **Normalization** - Auto-levels to maximize dynamic range
-4. **Contrast enhancement** - Linear transform: `output = 1.5 * input - 64`
-5. **Sharpening** - Gaussian sharpen with σ=1.0
-6. **Binarization** - Threshold at 128 for crisp text/background separation
-
-### Google Cloud Vision Integration
-
-```
-POST /api/ocr
-├── Rate limit check (IP-based, 950/month)
-├── File validation (10MB max, image/* only)
-├── Image preprocessing pipeline
-├── Base64 encode (15MB limit post-encoding)
-├── Vision API call (TEXT_DETECTION)
-└── Receipt parsing + structured response
-```
-
-**Security measures:**
-- Server-side rate limiting via Upstash Redis (per-IP and global limits)
-- Client-side usage tracking for UX (shows remaining scans)
-- File type validation (magic bytes via Sharp, not just MIME type)
-- Max file size: 10MB, max dimensions: 4096x4096
-- Sanitized logging (no PII, truncated text previews)
-
-### Receipt Text Parsing
-
-The parser uses heuristic pattern matching to extract structured data from OCR text:
-
-**Item extraction:**
-```
-Line patterns tried:
-  $10.00          → Price only (orphan price)
-  Burger $10.00   → Item with price
-  Burger          → Name only (orphan name)
-  2 x Taco $8.00  → Quantity + item + price
-```
-
-**Orphan matching:**
-When items and prices appear on separate lines (common in columnar receipts), the parser:
-1. Groups consecutive orphan names into "clusters"
-2. Finds orphan prices that follow each cluster
-3. Matches names to prices by position within clusters
-4. Falls back to simple order-based matching for unmatched orphans
-
-**Meta field detection (keyword-based):**
-- Subtotal: `subtotal`, `sub total`, `food total`, `item total`
-- Tax: `tax`, `sales tax`, `gst`, `hst`, `vat`
-- Tip: `tip`, `gratuity`, `service`
-- Total: `total`, `amount due`, `balance`, `grand total`
-- Fees: `fee`, `service charge`, `surcharge`, `delivery`
-- Discounts: `discount`, `coupon`, `promo`, `savings`
-
-**OCR text cleaning:**
-- Unicode normalization (fancy quotes → straight quotes)
-- Common OCR error correction: `O` → `0`, `l`/`I` → `1` when adjacent to digits
-- Comma-as-decimal fix: `10,00` → `10.00`
 
 ---
 
@@ -216,7 +151,9 @@ const MealContext = createContext<{
 }>();
 ```
 
-**Auto-save:** Every state change triggers `localStorage.setItem()` via `useEffect`.
+**Auto-save:** Every state change writes the meal (with a timestamp) to localStorage.
+
+**Resume, not auto-restore:** On open, a saved meal from the last 24 hours is offered as a "Resume" card on the landing page instead of loading automatically. Older or empty drafts are discarded.
 
 **Cascading deletes:** Removing a diner also removes:
 - Their assignments from all items
@@ -225,50 +162,27 @@ const MealContext = createContext<{
 
 ---
 
-## Rate Limiting
+## Share Links
 
-### Server-side (Upstash Redis)
+`POST /api/share` validates the split (zod) and stores it in Upstash Redis under a 10-character id derived from a hash of its contents, so sharing the same split twice gives the same link. Links expire after a year; writes are rate limited per IP.
 
-- **Per-IP limit:** 950 scans/month (buffer from 1,000 free tier)
-- **Global limit:** Backstop for total API usage
-- Returns `429 Too Many Requests` with `Retry-After` header
-
-### Client-side (localStorage)
-
-- Mirrors server count for instant UX feedback
-- Shows "X scans remaining" before upload
-- Syncs on 429 responses from server
-- Resets automatically on month change
+If Redis isn't configured or is unreachable, the app falls back to a self-contained link: `/split#<deflate-compressed payload>`. Old `/split?data=` links still work.
 
 ---
 
 ## Environment Variables
 
 ```env
-# Required for OCR functionality
-GOOGLE_CLOUD_VISION_API_KEY=your_api_key
-
-# Optional: Upstash Redis for server-side rate limiting
+# Upstash Redis for short share links. KV_REST_API_URL / KV_REST_API_TOKEN
+# (the names Vercel's Upstash integration sets) also work.
 UPSTASH_REDIS_REST_URL=your_redis_url
 UPSTASH_REDIS_REST_TOKEN=your_redis_token
 ```
-
-### Google Cloud Vision Setup
-
-1. Create project at [console.cloud.google.com](https://console.cloud.google.com)
-2. Enable **Cloud Vision API**
-3. Create API key (Credentials → Create Credentials → API Key)
-4. Restrict key to Cloud Vision API only (recommended)
-5. Add to `.env.local`
-
-Free tier: 1,000 TEXT_DETECTION requests/month
 
 ---
 
 ## Limitations
 
-- **OCR accuracy** varies with receipt quality, lighting, and print format
-- **Receipt parsing** is heuristic-based; unusual formats may need manual correction
 - **No cloud sync** - data is browser-local (localStorage only)
 - **Single device** - no account system or cross-device access
 
@@ -278,9 +192,9 @@ Free tier: 1,000 TEXT_DETECTION requests/month
 
 - [ ] Database integration (Supabase/PlanetScale) for persistent storage
 - [ ] User accounts with meal history
-- [ ] Shareable meal links (view-only and collaborative)
+- [x] Shareable view-only meal links
+- [ ] Collaborative meal links
 - [ ] Payment app integration (Venmo, PayPal, Zelle deep links)
-- [ ] ML-enhanced receipt parsing (fine-tuned model for receipt formats)
 - [ ] Multi-currency support with exchange rates
 - [ ] Recurring split templates (for regular group dinners)
 - [ ] Mobile apps (React Native or PWA enhancement)

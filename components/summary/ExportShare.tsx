@@ -1,7 +1,7 @@
 'use client';
 
 import { useMeal } from '@/lib/store/meal-store';
-import { generateMealSummary } from '@/lib/utils/calculations';
+import { generateMealSummary, getUnassignedItems } from '@/lib/utils/calculations';
 import { formatCurrency, formatDate } from '@/lib/utils/helpers';
 import { buildSharedSplit, createShareLink, getSettlements } from '@/lib/utils/share';
 import { useState, useEffect, useMemo } from 'react';
@@ -43,6 +43,7 @@ export default function ExportShare() {
   if (!meal || !split) return null;
 
   const summary = generateMealSummary(meal);
+  const unassigned = getUnassignedItems(meal);
   const settlements = getSettlements(split);
   const money = (cents: number) => formatCurrency(cents / 100);
 
@@ -129,6 +130,13 @@ export default function ExportShare() {
           <p className="text-sm text-stone-500">Share the breakdown with friends</p>
         </div>
       </div>
+
+      {unassigned.length > 0 && (
+        <div className="mb-5 p-3 rounded-xl bg-amber-50 border border-amber-200 text-sm text-amber-800">
+          {unassigned.length === 1 ? `"${unassigned[0].name}" isn't` : `${unassigned.length} items aren't`} assigned to
+          anyone yet, so nobody is paying for {unassigned.length === 1 ? 'it' : 'them'} in this link.
+        </div>
+      )}
 
       <div className="mb-5">
         <label className="label" htmlFor="share-meal-name">Meal name</label>
