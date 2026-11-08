@@ -32,7 +32,8 @@ export interface SharedItemShare {
 
 export interface SharedItem {
   name: string;
-  amount: number; // cents, full item price
+  amount: number; // cents, full line price (quantity × unit price)
+  quantity: number;
   shares: SharedItemShare[];
 }
 
@@ -102,8 +103,9 @@ export function buildSharedSplit(meal: Meal, payerId?: string): SharedSplit {
     const target = Math.abs(rawSum - item.amount) < 0.005 ? amount : toCents(rawSum);
     const cents = distributeCents(target, raw);
     return {
-      name: item.quantity > 1 ? `${item.name} (×${item.quantity})` : item.name,
+      name: item.name,
       amount,
+      quantity: Math.max(1, Math.round(item.quantity || 1)),
       shares: cents
         .map((c, i) => ({ diner: i, amount: c }))
         .filter((s) => s.amount !== 0),
@@ -140,14 +142,20 @@ export function getSettlements(split: SharedSplit): Settlement[] {
 //
 // [2, title, restaurant, date, total, payer, diners, items]
 //   diner: [name, items, tax, tip, other, total]
-//   item:  [name, amount, [dinerIdx, cents, dinerIdx, cents, ...]]
+//   item:  [name, amount, [dinerIdx, cents, dinerIdx, cents, ...], quantity?]
+//          (quantity omitted when 1; links made before it existed have none)
 // ---------------------------------------------------------------------------
 
 const cents = z.number().int().safe();
 const name = z.string().max(100);
 
 const WireDiner = z.tuple([name, cents, cents, cents, cents, cents]);
-const WireItem = z.tuple([z.string().max(200), cents, z.array(cents).max(100)]);
+const WireItem = z.tuple([
+  z.string().max(200),
+  cents,
+  z.array(cents).max(100),
+  z.number().int().min(1).max(999).optional(),
+]);
 
 export const WireSchema = z.tuple([
   z.literal(2),
@@ -171,7 +179,10 @@ export function toWire(split: SharedSplit): Wire {
     split.total,
     split.payer ?? -1,
     split.diners.map((d) => [d.name, d.items, d.tax, d.tip, d.other, d.total]),
-    split.items.map((it) => [it.name, it.amount, it.shares.flatMap((s) => [s.diner, s.amount])]),
+    split.items.map((it) => {
+      const flat = it.shares.flatMap((s) => [s.diner, s.amount]);
+      return it.quantity > 1 ? [it.name, it.amount, flat, it.quantity] : [it.name, it.amount, flat];
+    }),
   ];
 }
 
@@ -182,14 +193,14 @@ export function fromWire(input: unknown): SharedSplit | null {
   if (payer >= diners.length) return null;
 
   const sharedItems: SharedItem[] = [];
-  for (const [itemName, amount, flat] of items) {
+  for (const [itemName, amount, flat, quantity] of items) {
     if (flat.length % 2 !== 0) return null;
     const shares: SharedItemShare[] = [];
     for (let i = 0; i < flat.length; i += 2) {
       if (flat[i] < 0 || flat[i] >= diners.length) return null;
       shares.push({ diner: flat[i], amount: flat[i + 1] });
     }
-    sharedItems.push({ name: itemName, amount, shares });
+    sharedItems.push({ name: itemName, amount, quantity: quantity ?? 1, shares });
   }
 
   return {
@@ -343,4 +354,64 @@ export async function createShareLink(split: SharedSplit, signal?: AbortSignal):
     if ((err as Error)?.name === 'AbortError') throw err;
   }
   return { url: `${origin}/split#${await encodeFragment(split)}`, short: false };
+}
+
+// ---------------------------------------------------------------------------
+// Per-person item lines for the breakdown view
+// ---------------------------------------------------------------------------
+
+export interface DinerItemLine {
+  name: string;
+  amount: number; // cents this person pays for the item
+  detail?: string; // how that amount was arrived at, when it isn't obvious
+}
+
+const fmt = (c: number) =>
+  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(c / 100);
+
+function joinNames(names: string[]): string {
+  if (names.length <= 1) return names.join('');
+  if (names.length === 2) return `${names[0]} & ${names[1]}`;
+  return `${names.slice(0, -1).join(', ')} & ${names[names.length - 1]}`;
+}
+
+/**
+ * What one person had, phrased the way you'd explain it at the table:
+ *   - "1 of 4 · $179.80 ÷ 4 = $44.95 each"  multi-quantity item, they had whole units
+ *   - "Split 3 ways with Liam & Alex · $9.00 total"  one dish shared evenly
+ *   - "Shared with Nishil · $14.00 total"  shared unevenly
+ * Whole units are detected from the amounts, so "4 people split 4 menus evenly"
+ * and "everyone got their own menu" both read as "1 of 4" (they cost the same).
+ */
+export function dinerItemLines(split: SharedSplit, dinerIdx: number): DinerItemLine[] {
+  const lines: DinerItemLine[] = [];
+  for (const item of split.items) {
+    const mine = item.shares.find((s) => s.diner === dinerIdx);
+    if (!mine) continue;
+    const others = item.shares.filter((s) => s.diner !== dinerIdx);
+    const otherNames = joinNames(others.map((s) => split.diners[s.diner]?.name ?? '?'));
+    const q = item.quantity;
+    let detail: string | undefined;
+
+    if (q > 1) {
+      const unit = item.amount / q;
+      const units = Math.round(mine.amount / unit);
+      const exact = Number.isInteger(unit);
+      const each = `${exact ? '' : '≈'}${fmt(Math.round(unit))} each`;
+      if (units >= 1 && Math.abs(mine.amount - units * unit) <= 1) {
+        detail = units === q && others.length === 0
+          ? `${q} × ${each}`
+          : `${units} of ${q} · ${fmt(item.amount)} ÷ ${q} = ${each}`;
+      } else {
+        detail = `${others.length ? `Shared with ${otherNames} · ` : ''}${q} × ${each} = ${fmt(item.amount)}`;
+      }
+    } else if (others.length > 0) {
+      const amounts = item.shares.map((s) => s.amount);
+      const even = Math.max(...amounts) - Math.min(...amounts) <= 1;
+      detail = `${even ? `Split ${item.shares.length} ways with` : 'Shared with'} ${otherNames} · ${fmt(item.amount)} total`;
+    }
+
+    lines.push({ name: item.name, amount: mine.amount, detail });
+  }
+  return lines;
 }

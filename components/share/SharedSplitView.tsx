@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { SharedSplit, SharedDiner, getSettlements } from '@/lib/utils/share';
+import { SharedSplit, SharedDiner, getSettlements, dinerItemLines } from '@/lib/utils/share';
 import { formatCurrency, formatDate } from '@/lib/utils/helpers';
 
 const money = (cents: number) => formatCurrency(cents / 100);
@@ -23,42 +23,8 @@ function Arrow() {
   );
 }
 
-function joinNames(names: string[]): string {
-  if (names.length <= 1) return names.join('');
-  if (names.length === 2) return `${names[0]} & ${names[1]}`;
-  return `${names.slice(0, -1).join(', ')} & ${names[names.length - 1]}`;
-}
-
-interface DinerLine {
-  name: string;
-  amount: number;
-  itemTotal: number;
-  note?: string;
-}
-
-/** Items this diner had, with a note on who they shared each one with. */
-function linesFor(split: SharedSplit, dinerIdx: number): DinerLine[] {
-  const lines: DinerLine[] = [];
-  for (const item of split.items) {
-    const mine = item.shares.find((s) => s.diner === dinerIdx);
-    if (!mine) continue;
-    const others = item.shares.filter((s) => s.diner !== dinerIdx);
-    let note: string | undefined;
-    if (others.length > 0) {
-      const amounts = item.shares.map((s) => s.amount);
-      const even = Math.max(...amounts) - Math.min(...amounts) <= 1;
-      const names = joinNames(others.map((s) => split.diners[s.diner]?.name ?? '?'));
-      note = even
-        ? `Split ${item.shares.length} ways with ${names}`
-        : `Shared with ${names}`;
-    }
-    lines.push({ name: item.name, amount: mine.amount, itemTotal: item.amount, note });
-  }
-  return lines;
-}
-
 function DinerBreakdown({ split, diner, index }: { split: SharedSplit; diner: SharedDiner; index: number }) {
-  const lines = linesFor(split, index);
+  const lines = dinerItemLines(split, index);
   const isPayer = split.payer === index;
 
   return (
@@ -75,16 +41,12 @@ function DinerBreakdown({ split, diner, index }: { split: SharedSplit; diner: Sh
       </div>
 
       {lines.length > 0 && (
-        <ul className="mb-3 divide-y divide-stone-200 border-y border-stone-200">
+        <ul className="divide-y divide-stone-200 border-t border-stone-200">
           {lines.map((line, i) => (
             <li key={i} className="flex items-start justify-between gap-3 py-2">
               <div className="min-w-0">
                 <p className="text-sm text-stone-800 break-words">{line.name}</p>
-                {line.note && (
-                  <p className="text-xs text-stone-500">
-                    {line.note} · {money(line.itemTotal)} total
-                  </p>
-                )}
+                {line.detail && <p className="text-xs text-stone-500">{line.detail}</p>}
               </div>
               <p className="text-sm font-medium text-stone-900 tabular-nums whitespace-nowrap">{money(line.amount)}</p>
             </li>
@@ -92,21 +54,26 @@ function DinerBreakdown({ split, diner, index }: { split: SharedSplit; diner: Sh
         </ul>
       )}
 
-      <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 text-xs">
-        <Chip label="Items" value={diner.items} />
-        <Chip label="Tax" value={diner.tax} />
-        <Chip label="Tip" value={diner.tip} />
-        {diner.other !== 0 && <Chip label="Other" value={diner.other} />}
-      </div>
+      {/* Receipt-style subtotal block: amounts share the item column */}
+      <dl className="border-t border-stone-300 pt-2 space-y-1 text-sm">
+        <SummaryRow label={lines.length > 0 ? 'Items subtotal' : 'Items'} value={diner.items} />
+        <SummaryRow label="Tax" value={diner.tax} />
+        <SummaryRow label="Tip" value={diner.tip} />
+        {diner.other !== 0 && <SummaryRow label="Fees & adjustments" value={diner.other} />}
+        <div className="flex items-center justify-between pt-1.5 mt-1.5 border-t border-stone-200">
+          <dt className="font-semibold text-stone-900">Total</dt>
+          <dd className="font-semibold text-stone-900 tabular-nums">{money(diner.total)}</dd>
+        </div>
+      </dl>
     </div>
   );
 }
 
-function Chip({ label, value }: { label: string; value: number }) {
+function SummaryRow({ label, value }: { label: string; value: number }) {
   return (
-    <div className="bg-white p-2 rounded-xl border border-stone-700">
-      <p className="text-stone-600">{label}</p>
-      <p className="font-medium text-stone-900 tabular-nums">{money(value)}</p>
+    <div className="flex items-center justify-between">
+      <dt className="text-stone-500">{label}</dt>
+      <dd className="text-stone-700 tabular-nums">{money(value)}</dd>
     </div>
   );
 }
