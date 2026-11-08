@@ -1,10 +1,23 @@
 'use client';
 
+import type { SavedDraft } from '@/lib/store/meal-store';
+
 interface LandingProps {
-  onSelectMode: (mode: 'upload' | 'manual') => void;
+  onStart: () => void;
+  draft: SavedDraft | null;
+  onResume: () => void;
+  onDiscard: () => void;
 }
 
-export default function Landing({ onSelectMode }: LandingProps) {
+function timeAgo(ms: number): string {
+  const mins = Math.max(0, Math.round((Date.now() - ms) / 60000));
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins} min ago`;
+  const hours = Math.round(mins / 60);
+  return `${hours} hr${hours === 1 ? '' : 's'} ago`;
+}
+
+export default function Landing({ onStart, draft, onResume, onDiscard }: LandingProps) {
   return (
     <div className="min-h-screen flex items-center justify-center p-6 overflow-auto relative">
       {/* Soft gradient orbs in background */}
@@ -27,82 +40,38 @@ export default function Landing({ onSelectMode }: LandingProps) {
           </p>
         </div>
 
-        {/* Two main options */}
-        <div className="grid sm:grid-cols-2 gap-4 mb-10">
-          {/* Upload Receipt Option */}
-          <button
-            onClick={() => onSelectMode('upload')}
-            className="card-elevated p-6 text-left group"
-          >
-            <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-primary-100 to-primary-200 mb-5 group-hover:from-primary-400 group-hover:to-primary-600 transition-all duration-300">
-              <svg
-                className="w-7 h-7 text-primary-600 group-hover:text-white transition-colors duration-300"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                  d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
-                />
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                  d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
-                />
-              </svg>
+        {/* Resume a recent meal, if there is one */}
+        {draft && (
+          <div className="card p-5 mb-4 flex flex-col sm:flex-row sm:items-center gap-4">
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-1">Pick up where you left off</p>
+              <p className="font-semibold text-stone-800 truncate">{draft.meal.title || 'Untitled meal'}</p>
+              <p className="text-sm text-stone-500">
+                {draft.meal.items.length} {draft.meal.items.length === 1 ? 'item' : 'items'} ·{' '}
+                {draft.meal.diners.length} {draft.meal.diners.length === 1 ? 'person' : 'people'} · {timeAgo(draft.savedAt)}
+              </p>
             </div>
-            <h2 className="text-xl font-bold text-stone-800 mb-2">
-              Scan Receipt
-            </h2>
-            <p className="text-stone-500 text-sm mb-4 leading-relaxed">
-              Upload a photo and we'll extract items automatically
-            </p>
-            <div className="flex items-center text-primary-600 font-semibold text-sm group-hover:gap-3 gap-2 transition-all duration-300">
-              Get started
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-              </svg>
+            <div className="flex gap-2 shrink-0">
+              <button onClick={onDiscard} className="btn-ghost text-sm py-2 px-4">Discard</button>
+              <button onClick={onResume} className="btn-secondary text-sm py-2 px-4">Resume</button>
             </div>
-          </button>
+          </div>
+        )}
 
-          {/* Manual Entry Option */}
-          <button
-            onClick={() => onSelectMode('manual')}
-            className="card-elevated p-6 text-left group"
-          >
-            <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-secondary-100 to-secondary-200 mb-5 group-hover:from-secondary-400 group-hover:to-secondary-600 transition-all duration-300">
-              <svg
-                className="w-7 h-7 text-secondary-600 group-hover:text-white transition-colors duration-300"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                />
-              </svg>
-            </div>
-            <h2 className="text-xl font-bold text-stone-800 mb-2">
-              Enter Manually
-            </h2>
-            <p className="text-stone-500 text-sm mb-4 leading-relaxed">
-              Type in items and prices for quick splits
-            </p>
-            <div className="flex items-center text-secondary-600 font-semibold text-sm group-hover:gap-3 gap-2 transition-all duration-300">
-              Get started
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-              </svg>
-            </div>
-          </button>
-        </div>
+        <button onClick={onStart} className="card-elevated w-full p-6 mb-10 text-left group flex items-center gap-5">
+          <div className="flex items-center justify-center w-14 h-14 shrink-0 rounded-2xl bg-gradient-to-br from-primary-100 to-primary-200 group-hover:from-primary-400 group-hover:to-primary-600 transition-all duration-300">
+            <svg className="w-7 h-7 text-primary-600 group-hover:text-white transition-colors duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
+            </svg>
+          </div>
+          <div className="flex-1">
+            <h2 className="text-xl font-bold text-stone-800 mb-1">Start a new split</h2>
+            <p className="text-stone-500 text-sm leading-relaxed">Type in the items and prices from the receipt</p>
+          </div>
+          <svg className="w-5 h-5 text-primary-600 shrink-0 group-hover:translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+          </svg>
+        </button>
 
         {/* How it works */}
         <div className="card p-6">
@@ -111,7 +80,7 @@ export default function Landing({ onSelectMode }: LandingProps) {
           </h3>
           <div className="grid grid-cols-3 gap-4">
             {[
-              { num: '1', title: 'Add items', desc: 'Scan or enter' },
+              { num: '1', title: 'Add items', desc: 'From the receipt' },
               { num: '2', title: 'Assign', desc: 'Who ate what' },
               { num: '3', title: 'Split', desc: 'Fair totals' },
             ].map((step, i) => (

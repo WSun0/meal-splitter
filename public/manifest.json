@@ -33,20 +33,17 @@
       "purpose": "maskable"
     }
   ],
-  "categories": ["utilities", "finance"],
+  "categories": [
+    "utilities",
+    "finance"
+  ],
   "screenshots": [],
   "shortcuts": [
     {
-      "name": "Scan Receipt",
-      "short_name": "Scan",
-      "description": "Scan a receipt to split",
-      "url": "/?mode=scan"
-    },
-    {
-      "name": "Manual Entry",
-      "short_name": "Manual",
-      "description": "Enter items manually",
-      "url": "/?mode=manual"
+      "name": "New Split",
+      "short_name": "New",
+      "description": "Start splitting a new bill",
+      "url": "/"
     }
   ]
 }

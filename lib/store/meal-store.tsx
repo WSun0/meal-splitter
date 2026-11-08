@@ -2,10 +2,19 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Meal, Diner, Item, Adjustment, ReceiptMeta } from '../types/meal';
-import { generateId, safeJsonParse } from '../utils/helpers';
+import { generateId, safeJsonParse, todayLocalISODate } from '../utils/helpers';
+
+export interface SavedDraft {
+  meal: Meal;
+  savedAt: number; // epoch ms
+}
 
 interface MealContextType {
   meal: Meal | null;
+  /** A meal left over from a previous visit, offered on the landing page instead of auto-loading. */
+  savedDraft: SavedDraft | null;
+  resumeDraft: () => void;
+  discardDraft: () => void;
   createMeal: (title: string, restaurant?: string, date?: string) => void;
   updateMealInfo: (updates: { title?: string; restaurant?: string; date?: string }) => void;
   addDiner: (name: string) => void;
@@ -23,34 +32,75 @@ interface MealContextType {
 const MealContext = createContext<MealContextType | undefined>(undefined);
 
 const STORAGE_KEY = 'mealsplit-current-meal';
+// Drafts older than this are dropped instead of offered for resume.
+const DRAFT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+function storageGet(): string | null {
+  try {
+    return localStorage.getItem(STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function storageSet(value: string | null) {
+  try {
+    if (value === null) localStorage.removeItem(STORAGE_KEY);
+    else localStorage.setItem(STORAGE_KEY, value);
+  } catch {
+    // storage unavailable (private mode, quota): the app still works, just without resume
+  }
+}
+
+/** Reads the saved draft. Handles the old format, which stored the bare Meal. */
+export function parseSavedDraft(raw: string | null, now = Date.now()): SavedDraft | null {
+  if (!raw) return null;
+  const parsed = safeJsonParse<unknown>(raw, null);
+  if (!parsed || typeof parsed !== 'object') return null;
+  const wrapped = parsed as { meal?: Meal; savedAt?: number };
+  const meal = (wrapped.meal ?? parsed) as Meal;
+  if (!meal || !Array.isArray(meal.items) || !Array.isArray(meal.diners)) return null;
+  const savedAt = typeof wrapped.savedAt === 'number' ? wrapped.savedAt : Date.parse(meal.createdAt) || 0;
+  if (now - savedAt > DRAFT_MAX_AGE_MS) return null;
+  if (meal.items.length === 0 && meal.diners.length === 0) return null; // nothing worth resuming
+  return { meal, savedAt };
+}
 
 export function MealProvider({ children }: { children: ReactNode }) {
   const [meal, setMeal] = useState<Meal | null>(null);
+  const [savedDraft, setSavedDraft] = useState<SavedDraft | null>(null);
 
-  // Load meal from localStorage on mount
+  // On open, never drop the user straight into the last meal. Offer it as a
+  // draft on the landing page (if it's recent), otherwise clear it.
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        setMeal(safeJsonParse<Meal | null>(saved, null));
-      }
-    }
+    const draft = parseSavedDraft(storageGet());
+    if (draft) setSavedDraft(draft);
+    else storageSet(null);
   }, []);
 
-  // Save meal to localStorage whenever it changes
+  // Persist the active meal so a refresh mid-split doesn't lose work.
   useEffect(() => {
-    if (typeof window !== 'undefined' && meal) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(meal));
-    }
+    if (meal) storageSet(JSON.stringify({ meal, savedAt: Date.now() }));
   }, [meal]);
 
+  const resumeDraft = () => {
+    if (savedDraft) setMeal(savedDraft.meal);
+    setSavedDraft(null);
+  };
+
+  const discardDraft = () => {
+    setSavedDraft(null);
+    storageSet(null);
+  };
+
   const createMeal = (title: string, restaurant?: string, date?: string) => {
+    setSavedDraft(null);
     const now = new Date().toISOString();
     const newMeal: Meal = {
       id: generateId(),
       title,
       restaurant,
-      date: date || now.split('T')[0],
+      date: date || todayLocalISODate(),
       createdAt: now,
       diners: [],
       items: [],
@@ -209,15 +259,17 @@ export function MealProvider({ children }: { children: ReactNode }) {
 
   const resetMeal = () => {
     setMeal(null);
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem(STORAGE_KEY);
-    }
+    setSavedDraft(null);
+    storageSet(null);
   };
 
   return (
     <MealContext.Provider
       value={{
         meal,
+        savedDraft,
+        resumeDraft,
+        discardDraft,
         createMeal,
         updateMealInfo,
         addDiner,

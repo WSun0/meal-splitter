@@ -13,12 +13,18 @@ export default function ItemsReview() {
 
   const handleStartEdit = (item: Item) => {
     setEditingId(item.id);
-    setEditForm({ name: item.name, quantity: item.quantity, amount: item.amount, isUncertain: item.isUncertain });
+    setEditForm({ name: item.name, quantity: item.quantity, amount: item.amount });
   };
 
   const handleSaveEdit = () => {
-    if (editingId && editForm.name && editForm.quantity && editForm.amount !== undefined) {
-      updateItem(editingId, { name: editForm.name, quantity: editForm.quantity, amount: editForm.amount, isUncertain: editForm.isUncertain });
+    const quantity = editForm.quantity;
+    const amount = editForm.amount;
+    if (
+      editingId && editForm.name?.trim() &&
+      quantity !== undefined && Number.isFinite(quantity) && quantity >= 1 &&
+      amount !== undefined && Number.isFinite(amount)
+    ) {
+      updateItem(editingId, { name: editForm.name.trim(), quantity, amount });
       setEditingId(null);
       setEditForm({});
     }
@@ -78,7 +84,7 @@ export default function ItemsReview() {
             </svg>
           </div>
           <p className="text-stone-600 font-medium mb-1">No items yet</p>
-          <p className="text-sm text-stone-400 mb-4">Upload a receipt or add items manually</p>
+          <p className="text-sm text-stone-400 mb-4">Add each item from the receipt</p>
           <button
             onClick={handleStartAdd}
             className="btn-secondary inline-flex items-center gap-2"
@@ -181,9 +187,7 @@ export default function ItemsReview() {
           <div
             key={item.id}
             className={`p-4 rounded-2xl transition-all duration-200 ${
-              item.isUncertain 
-                ? 'bg-amber-50 border-2 border-amber-200' 
-                : 'bg-stone-50 border-2 border-transparent hover:border-stone-200'
+              'bg-stone-50 border-2 border-transparent hover:border-stone-200'
             } ${editingId === item.id ? 'ring-2 ring-primary-400 ring-offset-2' : ''}`}
           >
             {editingId === item.id ? (
@@ -212,7 +216,6 @@ export default function ItemsReview() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <p className="font-semibold text-stone-800 truncate">{item.name}</p>
-                    {item.isUncertain && <span className="badge badge-warning text-xs">Check</span>}
                   </div>
                   <p className="text-sm text-stone-500">Qty: {item.quantity}</p>
                 </div>

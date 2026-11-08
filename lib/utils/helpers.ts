@@ -26,7 +26,10 @@ export function formatCurrency(amount: number): string {
  * Format date
  */
 export function formatDate(dateString: string): string {
-  const date = new Date(dateString);
+  // A bare YYYY-MM-DD is parsed by Date as UTC midnight, which renders as the
+  // previous day in US time zones. Treat it as a local calendar date instead.
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateString);
+  const date = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(dateString);
   return new Intl.DateTimeFormat('en-US', {
     year: 'numeric',
     month: 'long',
@@ -44,4 +47,14 @@ export function safeJsonParse<T>(json: string | null, fallback: T): T {
   } catch {
     return fallback;
   }
+}
+
+/**
+ * Today's date as YYYY-MM-DD in the user's local time zone.
+ * (new Date().toISOString() gives the UTC date, which is tomorrow after ~4pm PT.)
+ */
+export function todayLocalISODate(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
