@@ -1,48 +1,71 @@
 'use client';
 
 import { useMeal } from '@/lib/store/meal-store';
-import { generateMealSummary, generateSettlementSuggestions } from '@/lib/utils/calculations';
+import { generateMealSummary } from '@/lib/utils/calculations';
 import { formatCurrency, formatDate } from '@/lib/utils/helpers';
-import { createShareableData, generateShareUrl } from '@/lib/utils/share';
-import { useState, useEffect } from 'react';
+import { buildSharedSplit, createShareLink, getSettlements } from '@/lib/utils/share';
+import { useState, useEffect, useMemo } from 'react';
 
 export default function ExportShare() {
-  const { meal } = useMeal();
+  const { meal, updateMealInfo } = useMeal();
   const [copied, setCopied] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
   const [payerIdForExport, setPayerIdForExport] = useState('');
   const [shareUrl, setShareUrl] = useState('');
+  const [linkPending, setLinkPending] = useState(true);
 
+  const split = useMemo(
+    () => (meal ? buildSharedSplit(meal, payerIdForExport || undefined) : null),
+    [meal, payerIdForExport]
+  );
+
+  // Regenerate the link when the split changes, debounced so typing the meal
+  // name doesn't fire a request per keystroke.
   useEffect(() => {
-    if (meal) {
-      const data = createShareableData(meal, payerIdForExport || undefined);
-      setShareUrl(generateShareUrl(data));
-    }
-  }, [meal, payerIdForExport]);
+    if (!split) return;
+    setLinkPending(true);
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        const { url } = await createShareLink(split, controller.signal);
+        setShareUrl(url);
+        setLinkPending(false);
+      } catch {
+        // aborted by a newer edit
+      }
+    }, 400);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [split]);
 
-  if (!meal) return null;
+  if (!meal || !split) return null;
 
   const summary = generateMealSummary(meal);
-  const settlements = payerIdForExport ? generateSettlementSuggestions(summary, payerIdForExport) : [];
+  const settlements = getSettlements(split);
+  const money = (cents: number) => formatCurrency(cents / 100);
 
   const generateTextSummary = (): string => {
     let text = `🍽️ Meal Split Summary\n━━━━━━━━━━━━━━━━━━━\n\n`;
-    text += `📍 ${meal.title}\n`;
-    if (meal.restaurant) text += `🏪 ${meal.restaurant}\n`;
-    text += `📅 ${formatDate(meal.date)}\n\n`;
-    text += `👥 Per-Person:\n`;
-    summary.dinerTotals.forEach((dt) => {
-      text += `\n${dt.dinerName}: ${formatCurrency(dt.total)}\n`;
-      text += `  • Items: ${formatCurrency(dt.itemSubtotal)}\n`;
-      text += `  • Tax: ${formatCurrency(dt.allocatedTax)}\n`;
-      text += `  • Tip: ${formatCurrency(dt.allocatedTip)}\n`;
-    });
-    text += `\n🧾 Total: ${formatCurrency(meal.receiptMeta.total)}\n`;
+    text += `📍 ${split.title}\n`;
+    if (split.restaurant) text += `🏪 ${split.restaurant}\n`;
+    text += `📅 ${formatDate(split.date)}\n\n`;
     if (settlements.length > 0) {
-      text += `\n💸 Settlement:\n`;
-      settlements.forEach((s) => { text += `${s.from} → ${s.to}: ${formatCurrency(s.amount)}\n`; });
+      text += `💸 ${settlements[0].to} paid. Settle up:\n`;
+      settlements.forEach((s) => { text += `${s.from} → ${s.to}: ${money(s.amount)}\n`; });
+      text += `\n`;
     }
-    text += `\n🔗 View: ${shareUrl}\n`;
+    text += `👥 Per-Person:\n`;
+    split.diners.forEach((d) => {
+      text += `\n${d.name}: ${money(d.total)}\n`;
+      text += `  • Items: ${money(d.items)}\n`;
+      text += `  • Tax: ${money(d.tax)}\n`;
+      text += `  • Tip: ${money(d.tip)}\n`;
+      if (d.other !== 0) text += `  • Other: ${money(d.other)}\n`;
+    });
+    text += `\n🧾 Total: ${money(split.total)}\n`;
+    if (shareUrl) text += `\n🔗 Full breakdown: ${shareUrl}\n`;
     text += `\n✨ Will's Meal Splitting Tool\n`;
     return text;
   };
@@ -86,7 +109,7 @@ export default function ExportShare() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `mealsplit-${meal.title.replace(/\s+/g, '-').toLowerCase()}-${meal.date}.csv`;
+    a.download = `mealsplit-${(meal.title.trim() || 'meal').replace(/\s+/g, '-').toLowerCase()}-${meal.date}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -105,6 +128,20 @@ export default function ExportShare() {
           <h2 className="text-xl font-bold text-stone-800">Share & Export</h2>
           <p className="text-sm text-stone-500">Share the breakdown with friends</p>
         </div>
+      </div>
+
+      <div className="mb-5">
+        <label className="label" htmlFor="share-meal-name">Meal name</label>
+        <input
+          id="share-meal-name"
+          type="text"
+          value={meal.title}
+          maxLength={200}
+          placeholder="e.g. Friday ramen"
+          onChange={(e) => updateMealInfo({ title: e.target.value })}
+          onFocus={(e) => { if (meal.title === 'New Meal') e.target.select(); }}
+          className="input"
+        />
       </div>
 
       {meal.diners.length > 1 && (
@@ -131,16 +168,20 @@ export default function ExportShare() {
         <div className="flex gap-2">
           <input
             type="text"
-            value={shareUrl}
+            value={linkPending && !shareUrl ? 'Generating link…' : shareUrl}
             readOnly
+            aria-busy={linkPending}
             className="input flex-1 text-sm bg-white/80 text-stone-600"
             onClick={(e) => (e.target as HTMLInputElement).select()}
           />
           <button
             onClick={handleCopyLink}
+            disabled={linkPending}
             className={`px-4 py-2.5 rounded-xl font-semibold text-sm transition-all duration-200 flex items-center gap-2 whitespace-nowrap ${
               linkCopied
                 ? 'bg-green-500 text-white'
+                : linkPending
+                ? 'bg-primary-300 text-white cursor-wait'
                 : 'bg-primary-600 text-white hover:bg-primary-700'
             }`}
           >
@@ -166,6 +207,7 @@ export default function ExportShare() {
       <div className="space-y-3">
         <button
           onClick={handleCopyToClipboard}
+          disabled={linkPending}
           className={`w-full py-4 px-4 rounded-2xl font-semibold transition-all duration-300 flex items-center justify-center gap-2 ${
             copied 
               ? 'bg-gradient-to-r from-green-500 to-green-600 text-white shadow-lg shadow-green-500/25' 

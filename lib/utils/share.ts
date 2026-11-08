@@ -1,150 +1,346 @@
 import { z } from 'zod';
-import { Meal, MealSummary as MealSummaryType, DinerTotal } from '../types/meal';
-import { generateMealSummary, generateSettlementSuggestions } from './calculations';
+import { Meal } from '../types/meal';
+import { generateMealSummary, calculateItemShareForDiner } from './calculations';
 
-// Zod schema for runtime validation of shareable data
-const DinerTotalSchema = z.object({
-  name: z.string().max(100),
-  itemSubtotal: z.number().finite(),
-  tax: z.number().finite(),
-  tip: z.number().finite(),
-  fees: z.number().finite(),
-  total: z.number().finite(),
-});
+/*
+ * Shared split data.
+ *
+ * Everything a viewer needs to see the split, with money stored as integer
+ * cents so nothing drifts through float math on the way over.
+ *
+ * There are two ways a split travels:
+ *   1. Short link  -> /s/<id>, payload stored in Upstash Redis (see /api/share)
+ *   2. Fallback    -> /split#<deflate+base64url payload>, used if Redis is down
+ *                     or not configured. The fragment never hits the server.
+ *
+ * Legacy v1 links (/split?data=<base64 JSON>) are still decoded.
+ */
 
-const SettlementSchema = z.object({
-  from: z.string().max(100),
-  to: z.string().max(100),
-  amount: z.number().finite().nonnegative(),
-});
-
-const ShareableDataSchema = z.object({
-  title: z.string().max(200),
-  restaurant: z.string().max(200).optional(),
-  date: z.string(),
-  dinerTotals: z.array(DinerTotalSchema).max(50),
-  receiptTotal: z.number().finite().nonnegative(),
-  payerId: z.string().max(100).optional(),
-  payerName: z.string().max(100).optional(),
-  settlements: z.array(SettlementSchema).max(50).optional(),
-});
-
-// Shareable data structure (minimal data needed for display)
-export interface ShareableData {
-  title: string;
-  restaurant?: string;
-  date: string;
-  dinerTotals: {
-    name: string;
-    itemSubtotal: number;
-    tax: number;
-    tip: number;
-    fees: number;
-    total: number;
-  }[];
-  receiptTotal: number;
-  payerId?: string;
-  payerName?: string;
-  settlements?: {
-    from: string;
-    to: string;
-    amount: number;
-  }[];
+export interface SharedDiner {
+  name: string;
+  items: number; // cents
+  tax: number;
+  tip: number;
+  other: number; // fees, discounts, adjustments
+  total: number;
 }
 
+export interface SharedItemShare {
+  diner: number; // index into diners
+  amount: number; // cents
+}
+
+export interface SharedItem {
+  name: string;
+  amount: number; // cents, full item price
+  shares: SharedItemShare[];
+}
+
+export interface SharedSplit {
+  title: string;
+  restaurant?: string;
+  date: string; // YYYY-MM-DD
+  total: number; // cents
+  payer?: number; // index into diners
+  diners: SharedDiner[];
+  items: SharedItem[]; // empty for legacy links
+}
+
+export interface Settlement {
+  from: string;
+  to: string;
+  amount: number; // cents
+}
+
+// ---------------------------------------------------------------------------
+// Building from a meal
+// ---------------------------------------------------------------------------
+
+const toCents = (dollars: number) => Math.round(dollars * 100);
+
 /**
- * Create shareable data from a meal
+ * Split `totalCents` across raw (fractional-dollar) shares so the rounded
+ * pieces add up exactly to the total. Largest-remainder method.
  */
-export function createShareableData(meal: Meal, payerId?: string): ShareableData {
+function distributeCents(totalCents: number, rawShares: number[]): number[] {
+  const rawCents = rawShares.map((s) => s * 100);
+  const floored = rawCents.map((c) => Math.floor(c));
+  let leftover = totalCents - floored.reduce((a, b) => a + b, 0);
+  const order = rawCents
+    .map((c, i) => ({ i, rem: c - Math.floor(c) }))
+    .sort((a, b) => b.rem - a.rem);
+  for (let k = 0; leftover > 0 && order.length > 0; k = (k + 1) % order.length) {
+    floored[order[k].i] += 1;
+    leftover--;
+  }
+  for (let k = order.length - 1; leftover < 0 && order.length > 0; k = (k - 1 + order.length) % order.length) {
+    floored[order[k].i] -= 1;
+    leftover++;
+  }
+  return floored;
+}
+
+export function buildSharedSplit(meal: Meal, payerId?: string): SharedSplit {
   const summary = generateMealSummary(meal);
-  const settlements = payerId ? generateSettlementSuggestions(summary, payerId) : [];
-  const payer = payerId ? meal.diners.find(d => d.id === payerId) : undefined;
+
+  const diners: SharedDiner[] = summary.dinerTotals.map((dt) => ({
+    name: dt.dinerName,
+    items: toCents(dt.itemSubtotal),
+    tax: toCents(dt.allocatedTax),
+    tip: toCents(dt.allocatedTip),
+    other: toCents(dt.allocatedFees + dt.allocatedDiscounts + dt.adjustments),
+    total: toCents(dt.total),
+  }));
+
+  const dinerIndex = new Map(summary.dinerTotals.map((dt, i) => [dt.dinerId, i]));
+
+  const items: SharedItem[] = meal.items.map((item) => {
+    const amount = toCents(item.amount);
+    const raw = summary.dinerTotals.map((dt) => calculateItemShareForDiner(item, dt.dinerId));
+    const rawSum = raw.reduce((a, b) => a + b, 0);
+    // Only force the pieces to sum to the item price if the item is fully assigned.
+    const target = Math.abs(rawSum - item.amount) < 0.005 ? amount : toCents(rawSum);
+    const cents = distributeCents(target, raw);
+    return {
+      name: item.quantity > 1 ? `${item.name} (×${item.quantity})` : item.name,
+      amount,
+      shares: cents
+        .map((c, i) => ({ diner: i, amount: c }))
+        .filter((s) => s.amount !== 0),
+    };
+  });
+
+  const payerIdx = payerId !== undefined ? dinerIndex.get(payerId) : undefined;
 
   return {
-    title: meal.title,
-    restaurant: meal.restaurant,
+    title: meal.title.trim() || 'Meal',
+    restaurant: meal.restaurant?.trim() || undefined,
     date: meal.date,
-    dinerTotals: summary.dinerTotals.map(dt => ({
-      name: dt.dinerName,
-      itemSubtotal: dt.itemSubtotal,
-      tax: dt.allocatedTax,
-      tip: dt.allocatedTip,
-      fees: dt.allocatedFees + dt.allocatedDiscounts + dt.adjustments,
-      total: dt.total,
-    })),
-    receiptTotal: meal.receiptMeta.total,
-    payerId,
-    payerName: payer?.name,
-    settlements: settlements.length > 0 ? settlements : undefined,
+    // The real bill total is the sum of what everyone owes (items + tax + tip
+    // + adjustments). receiptMeta.total is only the OCR-parsed figure and is 0
+    // for manual entry, which is what caused the "$0.00 total" bug.
+    total: diners.reduce((sum, d) => sum + d.total, 0),
+    payer: payerIdx,
+    diners,
+    items,
   };
 }
 
-/**
- * Encode shareable data to a URL-safe string
- * Uses modern TextEncoder for proper UTF-8 handling
- */
-export function encodeShareData(data: ShareableData): string {
-  try {
-    const json = JSON.stringify(data);
-    // Use TextEncoder for proper UTF-8 encoding
-    const encoder = new TextEncoder();
-    const bytes = encoder.encode(json);
-    // Convert bytes to base64
-    const base64 = btoa(String.fromCharCode(...bytes));
-    // Make it URL-safe by replacing + with -, / with _, and removing =
-    return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-  } catch (error) {
-    console.error('Failed to encode share data:', error);
-    return '';
-  }
+export function getSettlements(split: SharedSplit): Settlement[] {
+  if (split.payer === undefined) return [];
+  const payer = split.diners[split.payer];
+  if (!payer) return [];
+  return split.diners
+    .filter((d, i) => i !== split.payer && d.total > 0)
+    .map((d) => ({ from: d.name, to: payer.name, amount: d.total }));
 }
 
-/**
- * Decode shareable data from a URL-safe string
- * Uses modern TextDecoder and Zod for runtime validation
- */
-export function decodeShareData(encoded: string): ShareableData | null {
+// ---------------------------------------------------------------------------
+// Wire format: compact positional arrays, validated with zod.
+//
+// [2, title, restaurant, date, total, payer, diners, items]
+//   diner: [name, items, tax, tip, other, total]
+//   item:  [name, amount, [dinerIdx, cents, dinerIdx, cents, ...]]
+// ---------------------------------------------------------------------------
+
+const cents = z.number().int().safe();
+const name = z.string().max(100);
+
+const WireDiner = z.tuple([name, cents, cents, cents, cents, cents]);
+const WireItem = z.tuple([z.string().max(200), cents, z.array(cents).max(100)]);
+
+export const WireSchema = z.tuple([
+  z.literal(2),
+  z.string().max(200),
+  z.string().max(200),
+  z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  cents,
+  z.number().int().min(-1).max(49),
+  z.array(WireDiner).min(1).max(50),
+  z.array(WireItem).max(200),
+]);
+
+export type Wire = z.infer<typeof WireSchema>;
+
+export function toWire(split: SharedSplit): Wire {
+  return [
+    2,
+    split.title,
+    split.restaurant ?? '',
+    split.date,
+    split.total,
+    split.payer ?? -1,
+    split.diners.map((d) => [d.name, d.items, d.tax, d.tip, d.other, d.total]),
+    split.items.map((it) => [it.name, it.amount, it.shares.flatMap((s) => [s.diner, s.amount])]),
+  ];
+}
+
+export function fromWire(input: unknown): SharedSplit | null {
+  const parsed = WireSchema.safeParse(input);
+  if (!parsed.success) return null;
+  const [, title, restaurant, date, total, payer, diners, items] = parsed.data;
+  if (payer >= diners.length) return null;
+
+  const sharedItems: SharedItem[] = [];
+  for (const [itemName, amount, flat] of items) {
+    if (flat.length % 2 !== 0) return null;
+    const shares: SharedItemShare[] = [];
+    for (let i = 0; i < flat.length; i += 2) {
+      if (flat[i] < 0 || flat[i] >= diners.length) return null;
+      shares.push({ diner: flat[i], amount: flat[i + 1] });
+    }
+    sharedItems.push({ name: itemName, amount, shares });
+  }
+
+  return {
+    title,
+    restaurant: restaurant || undefined,
+    date,
+    total,
+    payer: payer >= 0 ? payer : undefined,
+    diners: diners.map(([n, it, tax, tip, other, t]) => ({ name: n, items: it, tax, tip, other, total: t })),
+    items: sharedItems,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Base64url helpers (work in both browser and Node)
+// ---------------------------------------------------------------------------
+
+function bytesToBase64Url(bytes: Uint8Array): string {
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function base64UrlToBytes(s: string): Uint8Array {
+  let b64 = s.replace(/-/g, '+').replace(/_/g, '/');
+  while (b64.length % 4) b64 += '=';
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+async function pipeThrough(bytes: Uint8Array, stream: CompressionStream | DecompressionStream): Promise<Uint8Array> {
+  const out = new Blob([bytes as BlobPart]).stream().pipeThrough(stream);
+  return new Uint8Array(await new Response(out).arrayBuffer());
+}
+
+// ---------------------------------------------------------------------------
+// Fallback link encoding: /split#<encoded>
+// Prefix "z" = deflate-raw compressed, "j" = plain JSON (no CompressionStream)
+// ---------------------------------------------------------------------------
+
+export async function encodeFragment(split: SharedSplit): Promise<string> {
+  const json = new TextEncoder().encode(JSON.stringify(toWire(split)));
+  if (typeof CompressionStream !== 'undefined') {
+    try {
+      return 'z' + bytesToBase64Url(await pipeThrough(json, new CompressionStream('deflate-raw')));
+    } catch {
+      // fall through
+    }
+  }
+  return 'j' + bytesToBase64Url(json);
+}
+
+export async function decodeFragment(encoded: string): Promise<SharedSplit | null> {
   try {
-    // Restore base64 padding and characters
-    let base64 = encoded.replace(/-/g, '+').replace(/_/g, '/');
-    // Add back padding
-    while (base64.length % 4) {
-      base64 += '=';
-    }
-    // Decode base64 to bytes
-    const binaryString = atob(base64);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
-    }
-    // Use TextDecoder for proper UTF-8 decoding
-    const decoder = new TextDecoder('utf-8');
-    const json = decoder.decode(bytes);
-
-    // Parse and validate with Zod
-    const parsed = JSON.parse(json);
-    const result = ShareableDataSchema.safeParse(parsed);
-
-    if (!result.success) {
-      console.error('Invalid share data schema:', result.error.issues);
+    const kind = encoded[0];
+    let bytes = base64UrlToBytes(encoded.slice(1));
+    if (kind === 'z') {
+      bytes = await pipeThrough(bytes, new DecompressionStream('deflate-raw'));
+    } else if (kind !== 'j') {
       return null;
     }
-
-    return result.data;
-  } catch (error) {
-    console.error('Failed to decode share data:', error);
+    // Cap decompressed size to avoid zip-bomb style payloads.
+    if (bytes.length > 64_000) return null;
+    return fromWire(JSON.parse(new TextDecoder().decode(bytes)));
+  } catch {
     return null;
   }
 }
 
-/**
- * Generate a shareable URL
- */
-export function generateShareUrl(data: ShareableData): string {
-  const encoded = encodeShareData(data);
-  if (typeof window !== 'undefined') {
-    const baseUrl = window.location.origin;
-    return `${baseUrl}/split?data=${encoded}`;
+// ---------------------------------------------------------------------------
+// Legacy v1: /split?data=<base64url JSON>
+// ---------------------------------------------------------------------------
+
+const LegacySchema = z.object({
+  title: z.string().max(200),
+  restaurant: z.string().max(200).optional(),
+  date: z.string(),
+  dinerTotals: z
+    .array(
+      z.object({
+        name: z.string().max(100),
+        itemSubtotal: z.number().finite(),
+        tax: z.number().finite(),
+        tip: z.number().finite(),
+        fees: z.number().finite(),
+        total: z.number().finite(),
+      })
+    )
+    .max(50),
+  receiptTotal: z.number().finite().nonnegative(),
+  payerName: z.string().max(100).optional(),
+});
+
+export function decodeLegacyShareData(encoded: string): SharedSplit | null {
+  try {
+    const json = new TextDecoder().decode(base64UrlToBytes(encoded));
+    const parsed = LegacySchema.safeParse(JSON.parse(json));
+    if (!parsed.success) return null;
+    const data = parsed.data;
+    const diners: SharedDiner[] = data.dinerTotals.map((d) => ({
+      name: d.name,
+      items: toCents(d.itemSubtotal),
+      tax: toCents(d.tax),
+      tip: toCents(d.tip),
+      other: toCents(d.fees),
+      total: toCents(d.total),
+    }));
+    const payer = data.payerName ? diners.findIndex((d) => d.name === data.payerName) : -1;
+    return {
+      title: data.title,
+      restaurant: data.restaurant,
+      date: data.date.slice(0, 10),
+      total: diners.reduce((s, d) => s + d.total, 0),
+      payer: payer >= 0 ? payer : undefined,
+      diners,
+      items: [],
+    };
+  } catch {
+    return null;
   }
-  return `/split?data=${encoded}`;
+}
+
+// ---------------------------------------------------------------------------
+// Link creation (client side)
+// ---------------------------------------------------------------------------
+
+/**
+ * Get a link for this split: a short /s/<id> link if the server can store it,
+ * otherwise a self-contained /split#... link.
+ */
+export async function createShareLink(split: SharedSplit, signal?: AbortSignal): Promise<{ url: string; short: boolean }> {
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  try {
+    const res = await fetch('/api/share', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(toWire(split)),
+      signal,
+    });
+    if (res.ok) {
+      const { id } = (await res.json()) as { id: string };
+      if (typeof id === 'string' && /^[A-Za-z0-9]{6,16}$/.test(id)) {
+        return { url: `${origin}/s/${id}`, short: true };
+      }
+    }
+  } catch (err) {
+    if ((err as Error)?.name === 'AbortError') throw err;
+  }
+  return { url: `${origin}/split#${await encodeFragment(split)}`, short: false };
 }

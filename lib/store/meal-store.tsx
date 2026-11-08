@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Meal, Diner, Item, Adjustment, ReceiptMeta } from '../types/meal';
-import { generateId, safeJsonParse } from '../utils/helpers';
+import { generateId, safeJsonParse, todayLocalISODate } from '../utils/helpers';
 
 interface MealContextType {
   meal: Meal | null;
@@ -50,7 +50,7 @@ export function MealProvider({ children }: { children: ReactNode }) {
       id: generateId(),
       title,
       restaurant,
-      date: date || now.split('T')[0],
+      date: date || todayLocalISODate(),
       createdAt: now,
       diners: [],
       items: [],

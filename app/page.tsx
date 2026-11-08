@@ -12,6 +12,7 @@ import MealSummary from '@/components/summary/MealSummary';
 import ExportShare from '@/components/summary/ExportShare';
 import { OCRResult } from '@/lib/types/meal';
 import { useClientOCR } from '@/lib/hooks/useClientOCR';
+import { todayLocalISODate } from '@/lib/utils/helpers';
 
 type Step = 'diners' | 'receipt' | 'items' | 'assign' | 'extras' | 'summary';
 
@@ -33,7 +34,7 @@ function MealSplitApp() {
   const ocr = useClientOCR();
 
   const handleModeSelection = (mode: 'upload' | 'manual') => {
-    createMeal('New Meal', undefined, new Date().toISOString().split('T')[0]);
+    createMeal('New Meal', undefined, todayLocalISODate());
     setReceiptMode(mode);
     setCurrentStep('receipt');
     
