@@ -231,6 +231,22 @@ body {
   box-shadow: 0 0 0 4px var(--color-primary-100);
 }
 
+/* Invalid field: red border and tint, shown after the user leaves it empty */
+.input[aria-invalid="true"] {
+  background: var(--color-red-50, #fef2f2);
+  border-color: var(--color-red-400, #f87171);
+}
+
+.input[aria-invalid="true"]:focus {
+  border-color: var(--color-red-500, #ef4444);
+  box-shadow: 0 0 0 4px var(--color-red-100, #fee2e2);
+}
+
+/* Input with a leading symbol like "$" */
+.input.input-prefixed {
+  padding-left: 1.75rem;
+}
+
 /* Label */
 .label {
   display: block;

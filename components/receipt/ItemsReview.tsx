@@ -2,62 +2,46 @@
 
 import { useState } from 'react';
 import { useMeal } from '@/lib/store/meal-store';
-import { Item } from '@/lib/types/meal';
+import { formatCurrency } from '@/lib/utils/helpers';
+import ItemForm, { ItemFormValues, PriceMode } from './ItemForm';
 
 export default function ItemsReview() {
   const { meal, addItem, updateItem, removeItem } = useMeal();
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState<Partial<Item>>({});
   const [isAdding, setIsAdding] = useState(false);
-  const [newItemForm, setNewItemForm] = useState({ name: '', quantity: 1, amount: 0 });
+  // Remember whether the user last typed per-item or total prices.
+  const [priceMode, setPriceMode] = useState<PriceMode>('each');
 
-  const handleStartEdit = (item: Item) => {
-    setEditingId(item.id);
-    setEditForm({ name: item.name, quantity: item.quantity, amount: item.amount });
+  const handleStartEdit = (id: string) => {
+    setIsAdding(false);
+    setEditingId(id);
   };
 
-  const handleSaveEdit = () => {
-    const quantity = editForm.quantity;
-    const amount = editForm.amount;
-    if (
-      editingId && editForm.name?.trim() &&
-      quantity !== undefined && Number.isFinite(quantity) && quantity >= 1 &&
-      amount !== undefined && Number.isFinite(amount)
-    ) {
-      updateItem(editingId, { name: editForm.name.trim(), quantity, amount });
-      setEditingId(null);
-      setEditForm({});
-    }
-  };
-
-  const handleCancelEdit = () => {
+  const handleSaveEdit = (values: ItemFormValues, mode: PriceMode) => {
+    if (editingId) updateItem(editingId, values);
+    setPriceMode(mode);
     setEditingId(null);
-    setEditForm({});
   };
 
   const handleStartAdd = () => {
-    setIsAdding(true);
     setEditingId(null);
-    setNewItemForm({ name: '', quantity: 1, amount: 0 });
+    setIsAdding(true);
   };
 
-  const handleSaveNewItem = () => {
-    if (newItemForm.name.trim() && newItemForm.amount > 0) {
-      addItem({
-        name: newItemForm.name.trim(),
-        quantity: newItemForm.quantity || 1,
-        amount: newItemForm.amount,
-        assignments: [],
-      });
-      setIsAdding(false);
-      setNewItemForm({ name: '', quantity: 1, amount: 0 });
-    }
-  };
-
-  const handleCancelAdd = () => {
+  const handleSaveNewItem = (values: ItemFormValues, mode: PriceMode) => {
+    addItem({ ...values, assignments: [] });
+    setPriceMode(mode);
     setIsAdding(false);
-    setNewItemForm({ name: '', quantity: 1, amount: 0 });
   };
+
+  const addForm = (
+    <ItemForm
+      defaultPriceMode={priceMode}
+      submitLabel="Add Item"
+      onSubmit={handleSaveNewItem}
+      onCancel={() => setIsAdding(false)}
+    />
+  );
 
   if (!meal) {
     return null;
@@ -92,7 +76,7 @@ export default function ItemsReview() {
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
-            Add Item Manually
+            Add Item
           </button>
         </div>
       </div>
@@ -115,54 +99,7 @@ export default function ItemsReview() {
           </div>
         </div>
         <div className="p-4 rounded-2xl bg-primary-50 border-2 border-primary-200 ring-2 ring-primary-400 ring-offset-2">
-          <div className="space-y-3">
-            <div className="grid grid-cols-12 gap-3">
-              <div className="col-span-12 sm:col-span-6">
-                <input
-                  type="text"
-                  value={newItemForm.name}
-                  onChange={(e) => setNewItemForm({ ...newItemForm, name: e.target.value })}
-                  className="input"
-                  placeholder="Item name"
-                  autoFocus
-                />
-              </div>
-              <div className="col-span-4 sm:col-span-2">
-                <input
-                  type="number"
-                  min="1"
-                  value={newItemForm.quantity}
-                  onChange={(e) => setNewItemForm({ ...newItemForm, quantity: parseInt(e.target.value, 10) || 1 })}
-                  className="input text-center"
-                  placeholder="Qty"
-                />
-              </div>
-              <div className="col-span-8 sm:col-span-4">
-                <div className="flex items-center gap-2">
-                  <span className="text-stone-400">$</span>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={newItemForm.amount || ''}
-                    onChange={(e) => setNewItemForm({ ...newItemForm, amount: parseFloat(e.target.value) || 0 })}
-                    className="input flex-1"
-                    placeholder="0.00"
-                  />
-                </div>
-              </div>
-            </div>
-            <div className="flex justify-end gap-2">
-              <button onClick={handleCancelAdd} className="btn-ghost text-sm py-2 px-4">Cancel</button>
-              <button
-                onClick={handleSaveNewItem}
-                disabled={!newItemForm.name.trim() || newItemForm.amount <= 0}
-                className="btn-primary text-sm py-2 px-4 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Add Item
-              </button>
-            </div>
-          </div>
+          {addForm}
         </div>
       </div>
     );
@@ -191,42 +128,31 @@ export default function ItemsReview() {
             } ${editingId === item.id ? 'ring-2 ring-primary-400 ring-offset-2' : ''}`}
           >
             {editingId === item.id ? (
-              <div className="space-y-3">
-                <div className="grid grid-cols-12 gap-3">
-                  <div className="col-span-12 sm:col-span-6">
-                    <input type="text" value={editForm.name || ''} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} className="input" placeholder="Item name" autoFocus />
-                  </div>
-                  <div className="col-span-4 sm:col-span-2">
-                    <input type="number" min="1" value={editForm.quantity || 1} onChange={(e) => setEditForm({ ...editForm, quantity: parseInt(e.target.value, 10) })} className="input text-center" />
-                  </div>
-                  <div className="col-span-8 sm:col-span-4">
-                    <div className="flex items-center gap-2">
-                      <span className="text-stone-400">$</span>
-                      <input type="number" step="0.01" min="0" value={editForm.amount || 0} onChange={(e) => setEditForm({ ...editForm, amount: parseFloat(e.target.value) })} className="input flex-1" />
-                    </div>
-                  </div>
-                </div>
-                <div className="flex justify-end gap-2">
-                  <button onClick={handleCancelEdit} className="btn-ghost text-sm py-2 px-4">Cancel</button>
-                  <button onClick={handleSaveEdit} className="btn-primary text-sm py-2 px-4">Save</button>
-                </div>
-              </div>
+              <ItemForm
+                initial={{ name: item.name, quantity: item.quantity, amount: item.amount }}
+                defaultPriceMode={priceMode}
+                submitLabel="Save"
+                onSubmit={handleSaveEdit}
+                onCancel={() => setEditingId(null)}
+              />
             ) : (
               <div className="flex items-center gap-4">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <p className="font-semibold text-stone-800 truncate">{item.name}</p>
                   </div>
-                  <p className="text-sm text-stone-500">Qty: {item.quantity}</p>
+                  <p className="text-sm text-stone-500">
+                    {item.quantity > 1 ? `${item.quantity} × ${formatCurrency(item.amount / item.quantity)} each` : 'Qty 1'}
+                  </p>
                 </div>
-                <p className="text-xl font-bold text-stone-800">${item.amount.toFixed(2)}</p>
+                <p className="text-xl font-bold text-stone-800">{formatCurrency(item.amount)}</p>
                 <div className="flex items-center gap-1">
-                  <button onClick={() => handleStartEdit(item)} className="p-2 rounded-xl text-stone-400 hover:text-primary-600 hover:bg-primary-50 transition-all">
+                  <button onClick={() => handleStartEdit(item.id)} aria-label={`Edit ${item.name}`} className="p-2 rounded-xl text-stone-400 hover:text-primary-600 hover:bg-primary-50 transition-all">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                     </svg>
                   </button>
-                  <button onClick={() => removeItem(item.id)} className="p-2 rounded-xl text-stone-400 hover:text-red-500 hover:bg-red-50 transition-all">
+                  <button onClick={() => removeItem(item.id)} aria-label={`Remove ${item.name}`} className="p-2 rounded-xl text-stone-400 hover:text-red-500 hover:bg-red-50 transition-all">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                     </svg>
@@ -240,54 +166,7 @@ export default function ItemsReview() {
         {/* Add New Item Form */}
         {isAdding ? (
           <div className="p-4 rounded-2xl bg-primary-50 border-2 border-primary-200 ring-2 ring-primary-400 ring-offset-2">
-            <div className="space-y-3">
-              <div className="grid grid-cols-12 gap-3">
-                <div className="col-span-12 sm:col-span-6">
-                  <input
-                    type="text"
-                    value={newItemForm.name}
-                    onChange={(e) => setNewItemForm({ ...newItemForm, name: e.target.value })}
-                    className="input"
-                    placeholder="Item name"
-                    autoFocus
-                  />
-                </div>
-                <div className="col-span-4 sm:col-span-2">
-                  <input
-                    type="number"
-                    min="1"
-                    value={newItemForm.quantity}
-                    onChange={(e) => setNewItemForm({ ...newItemForm, quantity: parseInt(e.target.value, 10) || 1 })}
-                    className="input text-center"
-                    placeholder="Qty"
-                  />
-                </div>
-                <div className="col-span-8 sm:col-span-4">
-                  <div className="flex items-center gap-2">
-                    <span className="text-stone-400">$</span>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={newItemForm.amount || ''}
-                      onChange={(e) => setNewItemForm({ ...newItemForm, amount: parseFloat(e.target.value) || 0 })}
-                      className="input flex-1"
-                      placeholder="0.00"
-                    />
-                  </div>
-                </div>
-              </div>
-              <div className="flex justify-end gap-2">
-                <button onClick={handleCancelAdd} className="btn-ghost text-sm py-2 px-4">Cancel</button>
-                <button
-                  onClick={handleSaveNewItem}
-                  disabled={!newItemForm.name.trim() || newItemForm.amount <= 0}
-                  className="btn-primary text-sm py-2 px-4 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Add Item
-                </button>
-              </div>
-            </div>
+            {addForm}
           </div>
         ) : (
           <button
