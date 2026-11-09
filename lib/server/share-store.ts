@@ -12,8 +12,10 @@ import { Wire } from '@/lib/utils/share';
  * pauses Blob rather than billing, in which case the app falls back to
  * self-contained /split#... links.
  *
- * Connecting a Blob store to the Vercel project sets BLOB_READ_WRITE_TOKEN.
- * SHARE_BLOB_ACCESS must match the store's access type (default: private).
+ * Auth: BLOB_READ_WRITE_TOKEN if set, otherwise BLOB_STORE_ID + Vercel's
+ * OIDC token (what newer Blob connections set up by default); the SDK picks
+ * whichever is available. SHARE_BLOB_ACCESS must match the store's access
+ * type (default: private).
  */
 
 const BASE62 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
@@ -24,7 +26,7 @@ const access = (): 'public' | 'private' => (process.env.SHARE_BLOB_ACCESS === 'p
 const pathFor = (id: string) => `shares/${id}.json`;
 
 export function isShareStorageConfigured(): boolean {
-  return Boolean(process.env.BLOB_READ_WRITE_TOKEN);
+  return Boolean(process.env.BLOB_READ_WRITE_TOKEN || process.env.BLOB_STORE_ID);
 }
 
 /** Content-addressed id: 10 base62 chars (~59 bits) of a SHA-256. */
