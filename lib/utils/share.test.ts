@@ -180,3 +180,30 @@ describe('decodeFragment hardening', () => {
     expect(await decodeFragment('z' + 'A'.repeat(200_000))).toBeNull();
   });
 });
+
+describe('payer pay details in share data', () => {
+  it('round-trips Venmo and Zelle when a payer is set', () => {
+    const meal = makeMeal();
+    meal.payerPayment = { venmo: '@liam_v', zelle: '555 123 4567' };
+    const split = buildSharedSplit(meal, 'b');
+    expect(split.pay).toEqual({ venmo: 'liam_v', zelle: '(555) 123-4567' });
+    expect(fromWire(JSON.parse(JSON.stringify(toWire(split))))!.pay).toEqual(split.pay);
+  });
+
+  it('leaves the wire format unchanged without pay details (old links keep their ids)', () => {
+    const split = buildSharedSplit(makeMeal(), 'b');
+    expect(toWire(split)).toHaveLength(8);
+  });
+
+  it('drops pay details when nobody is marked as payer', () => {
+    const meal = makeMeal();
+    meal.payerPayment = { venmo: 'liam_v' };
+    expect(buildSharedSplit(meal).pay).toBeUndefined();
+  });
+
+  it('re-validates pay details when decoding someone else\'s link', () => {
+    const wire = toWire(buildSharedSplit(makeMeal(), 'b')) as unknown[];
+    wire.push(['x&amount=9999', 'javascript:alert(1)']);
+    expect(fromWire(wire)!.pay).toBeUndefined();
+  });
+});

@@ -52,6 +52,11 @@ const securityHeaders = [
 const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  // Fonts read from disk by the link-preview image routes.
+  outputFileTracingIncludes: {
+    '/opengraph-image': ['./lib/og/fonts/**'],
+    '/s/[id]/opengraph-image': ['./lib/og/fonts/**'],
+  },
   async headers() {
     return [
       { source: '/:path*', headers: securityHeaders },
