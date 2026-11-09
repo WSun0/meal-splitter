@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { MealProvider, useMeal } from '@/lib/store/meal-store';
-import Landing from '@/components/Landing';
+import Landing, { Wordmark } from '@/components/Landing';
 import DinersManagement from '@/components/meal/DinersManagement';
 import ItemsReview from '@/components/receipt/ItemsReview';
 import ItemAssignment from '@/components/assignment/ItemAssignment';
@@ -15,10 +15,10 @@ type Step = 'items' | 'diners' | 'assign' | 'extras' | 'summary';
 
 const steps: { id: Step; label: string }[] = [
   { id: 'items', label: 'Items' },
-  { id: 'diners', label: 'Diners' },
+  { id: 'diners', label: 'People' },
   { id: 'assign', label: 'Assign' },
-  { id: 'extras', label: 'Tax & Tip' },
-  { id: 'summary', label: 'Summary' },
+  { id: 'extras', label: 'Tax & tip' },
+  { id: 'summary', label: 'Bill' },
 ];
 
 function MealSplitApp() {
@@ -52,108 +52,71 @@ function MealSplitApp() {
 
   return (
     <div className="min-h-screen">
-      {/* Header */}
+      {/* Header + steps, on the folder */}
       {meal && (
-        <header className="sticky top-0 z-50 backdrop-blur-xl bg-white/70 border-b border-stone-200/50">
-          <div className="max-w-3xl mx-auto px-4 py-3 flex justify-between items-center">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center shadow-md shadow-primary-500/20">
-                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z" />
-                </svg>
-              </div>
-              <h1 className="text-xl font-bold text-stone-800">
-                Will's Meal Splitting Tool
-              </h1>
-            </div>
+        <header className="sticky top-0 z-50 bg-folder/95 backdrop-blur border-b border-folder-line">
+          <div className="max-w-2xl mx-auto px-4 pt-3 flex justify-between items-center">
+            <Wordmark className="text-lg" />
             <button
               onClick={() => {
                 if (confirm('Start a new meal? Current data will be lost.')) {
                   resetMeal();
                 }
               }}
-              className="btn-ghost text-sm py-2 px-3"
+              className="btn-folder"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
-              </svg>
-              New
+              New split
             </button>
           </div>
-        </header>
-      )}
-
-      {/* Progress indicator */}
-      {meal && (
-        <div className="sticky top-[57px] z-40 backdrop-blur-xl bg-white/70 border-b border-stone-200/50">
-          <div className="max-w-3xl mx-auto px-4">
-            <div className="flex items-center py-3 overflow-x-auto">
+          <nav className="max-w-2xl mx-auto px-4" aria-label="Steps">
+            <ol className="flex gap-4 sm:gap-6 overflow-x-auto -mb-px">
               {steps.map((step, idx) => {
                 const isActive = currentStep === step.id;
                 const isPast = idx < currentStepIndex;
-                
                 return (
-                  <div key={step.id} className="flex items-center flex-shrink-0">
+                  <li key={step.id} className="shrink-0">
                     <button
                       onClick={() => setCurrentStep(step.id)}
-                      className={`relative flex items-center gap-1.5 pl-3 pr-4 py-2 transition-all duration-200 ${
+                      aria-current={isActive ? 'step' : undefined}
+                      className={`flex items-center gap-1.5 py-3 border-b-2 text-[15px] transition-colors ${
                         isActive
-                          ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white font-semibold shadow-md shadow-primary-500/20'
+                          ? 'border-secondary-400 text-folder-text font-semibold'
                           : isPast
-                          ? 'bg-primary-100 text-primary-700 font-medium hover:bg-primary-150'
-                          : 'bg-stone-100 text-stone-500 hover:bg-stone-200'
+                          ? 'border-transparent text-folder-text/85 hover:text-folder-text'
+                          : 'border-transparent text-folder-muted/80 hover:text-folder-text'
                       }`}
-                      style={{
-                        clipPath: 'polygon(0 0, calc(100% - 12px) 0, 100% 50%, calc(100% - 12px) 100%, 0 100%, 12px 50%)',
-                        marginLeft: idx === 0 ? 0 : '-8px',
-                        paddingLeft: idx === 0 ? '12px' : '20px',
-                      }}
                     >
-                      <span className={`w-5 h-5 rounded-full text-xs flex items-center justify-center font-bold ${
-                        isActive ? 'bg-white/25 text-white' : isPast ? 'bg-primary-200 text-primary-700' : 'bg-stone-200 text-stone-600'
-                      }`}>
-                        {isPast ? (
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                          </svg>
-                        ) : (
-                          idx + 1
-                        )}
+                      <span className={`text-xs tabular-nums ${isActive ? 'text-secondary-400' : ''}`}>
+                        {isPast ? '✓' : idx + 1}
                       </span>
-                      <span className="text-sm whitespace-nowrap">{step.label}</span>
+                      {step.label}
                     </button>
-                  </div>
+                  </li>
                 );
               })}
-            </div>
-          </div>
-        </div>
+            </ol>
+          </nav>
+        </header>
       )}
 
       {/* Main content */}
       {!meal ? (
         <Landing onStart={handleStart} draft={savedDraft} onResume={handleResume} onDiscard={discardDraft} />
       ) : (
-        <main className="max-w-3xl mx-auto px-4 py-8">
-          <div className="space-y-6 animate-fade-in">
+        <main className="max-w-2xl mx-auto px-4 py-6 sm:py-8">
+          <div className="space-y-5">
             {currentStep === 'items' && (
               <>
                 <ItemsReview />
                 {canProceedFromItems && (
-                  <div className="text-center">
+                  <div className="flex sm:justify-end">
                     {canProceedFromDiners ? (
-                      <button onClick={() => setCurrentStep('assign')} className="btn-primary text-base py-3 px-8">
-                        Continue to Assignment
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                        </svg>
+                      <button onClick={() => setCurrentStep('assign')} className="btn-cta w-full sm:w-auto text-base py-3.5 px-8">
+                        Next: who had what
                       </button>
                     ) : (
-                      <button onClick={() => setCurrentStep('diners')} className="btn-secondary text-base py-3 px-8">
-                        Add Diners Next
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                        </svg>
+                      <button onClick={() => setCurrentStep('diners')} className="btn-cta w-full sm:w-auto text-base py-3.5 px-8">
+                        Next: who's splitting
                       </button>
                     )}
                   </div>
@@ -165,12 +128,9 @@ function MealSplitApp() {
               <>
                 <DinersManagement />
                 {canProceedFromDiners && canProceedFromItems && (
-                  <div className="text-center">
-                    <button onClick={() => setCurrentStep('assign')} className="btn-primary text-base py-3 px-8">
-                      Continue to Assignment
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                      </svg>
+                  <div className="flex sm:justify-end">
+                    <button onClick={() => setCurrentStep('assign')} className="btn-cta w-full sm:w-auto text-base py-3.5 px-8">
+                      Next: who had what
                     </button>
                   </div>
                 )}
@@ -181,12 +141,9 @@ function MealSplitApp() {
               <>
                 <ItemAssignment />
                 {hasAssignments && (
-                  <div className="text-center">
-                    <button onClick={() => setCurrentStep('extras')} className="btn-primary text-base py-3 px-8">
-                      Continue to Tax & Tip
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                      </svg>
+                  <div className="flex sm:justify-end">
+                    <button onClick={() => setCurrentStep('extras')} className="btn-cta w-full sm:w-auto text-base py-3.5 px-8">
+                      Next: tax & tip
                     </button>
                   </div>
                 )}
@@ -196,12 +153,9 @@ function MealSplitApp() {
             {currentStep === 'extras' && (
               <>
                 <ExtrasManager />
-                <div className="text-center">
-                  <button onClick={() => setCurrentStep('summary')} className="btn-primary text-base py-3 px-8">
-                    View Final Summary
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                    </svg>
+                <div className="flex sm:justify-end">
+                  <button onClick={() => setCurrentStep('summary')} className="btn-cta w-full sm:w-auto text-base py-3.5 px-8">
+                    See the bill
                   </button>
                 </div>
               </>
@@ -219,9 +173,9 @@ function MealSplitApp() {
 
       {/* Footer */}
       {meal && (
-        <footer className="mt-12 py-8">
-          <div className="max-w-3xl mx-auto px-4 text-center">
-            <p className="text-sm text-stone-400">
+        <footer className="mt-10 py-8">
+          <div className="max-w-2xl mx-auto px-4 text-center">
+            <p className="text-sm text-folder-muted">
               © William Sun 2026
             </p>
           </div>

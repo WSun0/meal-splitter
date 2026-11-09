@@ -1,30 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <!-- Background circle -->
-  <circle cx="256" cy="256" r="256" fill="#f46d4d"/>
-
-  <!-- Receipt shape -->
-  <path d="M160 80 h192 a16 16 0 0 1 16 16 v320 l-24 -16 -24 16 -24 -16 -24 16 -24 -16 -24 16 -24 -16 -24 16 -24 -16 -24 16 V96 a16 16 0 0 1 16 -16z" fill="white"/>
-
-  <!-- Receipt lines -->
-  <rect x="184" y="128" width="144" height="16" rx="4" fill="#e5e0d8"/>
-  <rect x="184" y="168" width="120" height="12" rx="3" fill="#d4cfc6"/>
-  <rect x="184" y="200" width="100" height="12" rx="3" fill="#d4cfc6"/>
-  <rect x="184" y="232" width="130" height="12" rx="3" fill="#d4cfc6"/>
-
-  <!-- Divider line -->
-  <rect x="184" y="268" width="144" height="4" rx="2" fill="#c4bfb6"/>
-
-  <!-- Total line -->
-  <rect x="184" y="296" width="80" height="16" rx="4" fill="#f46d4d"/>
-  <rect x="280" y="296" width="48" height="16" rx="4" fill="#4a9175"/>
-
-  <!-- Split indicator (two small people icons) -->
-  <circle cx="200" cy="360" r="12" fill="#78716c"/>
-  <ellipse cx="200" cy="388" rx="16" ry="12" fill="#78716c"/>
-
-  <circle cx="312" cy="360" r="12" fill="#78716c"/>
-  <ellipse cx="312" cy="388" rx="16" ry="12" fill="#78716c"/>
-
-  <!-- Split arrow -->
-  <path d="M240 374 h32 M264 366 l8 8 -8 8" stroke="#f46d4d" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <rect width="512" height="512" rx="112" fill="#14322a"/>
+  <!-- paper slip with a torn bottom edge -->
+  <path d="M150 104h212a14 14 0 0 1 14 14v270l-22.4 22-22.4-22-22.4 22-22.4-22-22.4 22-22.4-22-22.4 22-22.4-22-22.4 22L136 388V118a14 14 0 0 1 14-14z" fill="#fbfaf6"/>
+  <!-- receipt lines -->
+  <rect x="172" y="156" width="112" height="18" rx="9" fill="#1f2622"/>
+  <rect x="172" y="206" width="168" height="10" rx="5" fill="#c9c6ba"/>
+  <rect x="172" y="240" width="168" height="10" rx="5" fill="#c9c6ba"/>
+  <rect x="172" y="274" width="128" height="10" rx="5" fill="#c9c6ba"/>
+  <rect x="172" y="318" width="168" height="16" rx="8" fill="#d9b45b"/>
 </svg>

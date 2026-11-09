@@ -5,6 +5,8 @@ import type { DragEvent } from 'react';
 import { useMeal } from '@/lib/store/meal-store';
 import { Assignment, Item, ItemPortion, SplitType } from '@/lib/types/meal';
 import { formatCurrency } from '@/lib/utils/helpers';
+import { personColor } from '@/lib/utils/person-color';
+import PersonAvatar from '@/components/ui/PersonAvatar';
 
 interface PortionEntry {
   itemId: string;
@@ -20,6 +22,8 @@ export default function ItemAssignment() {
   const { meal, updateItem } = useMeal();
   const [activeBucketId, setActiveBucketId] = useState<string | null>(null);
   const [draggingPortionId, setDraggingPortionId] = useState<string | null>(null);
+  // Tap-to-assign: the item currently picked, whose people can be toggled below it.
+  const [selectedPortionId, setSelectedPortionId] = useState<string | null>(null);
 
   const getExpectedQuantity = (item: Item) => Math.max(1, Math.round(item.quantity || 1));
 
@@ -51,27 +55,11 @@ export default function ItemAssignment() {
 
   if (!meal || meal.diners.length === 0 || meal.items.length === 0) {
     return (
-      <div className="card p-6">
-        <div className="flex items-center gap-4 mb-6">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center shadow-lg shadow-primary-500/20">
-            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-            </svg>
-          </div>
-          <div>
-            <h2 className="text-xl font-bold text-stone-800">Assign Items</h2>
-            <p className="text-sm text-stone-500">Drag items into each diner&apos;s bucket</p>
-          </div>
-        </div>
-        <div className="text-center py-12 px-4 rounded-2xl bg-stone-50 border-2 border-dashed border-stone-200">
-          <div className="w-16 h-16 rounded-full bg-stone-100 flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8 text-stone-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-            </svg>
-          </div>
-          <p className="text-stone-600 font-medium mb-1">{meal?.diners.length === 0 ? 'No diners yet' : 'No items yet'}</p>
-          <p className="text-sm text-stone-400">Add {meal?.diners.length === 0 ? 'diners' : 'items'} first to assign</p>
-        </div>
+      <div className="card p-5 sm:p-6">
+        <h2 className="font-serif text-2xl font-medium tracking-tight text-ink">Who had what?</h2>
+        <p className="text-ink-muted mt-2">
+          {meal?.items.length === 0 ? 'Add the items from the receipt first.' : 'Add the people at the table first.'}
+        </p>
       </div>
     );
   }
@@ -119,6 +107,11 @@ export default function ItemAssignment() {
     updateItemPortions(itemId, (portions) =>
       portions.map((portion) => (portion.id === portionId ? { ...portion, assignments: [] } : portion))
     );
+  };
+
+  const toggleDiner = (itemId: string, portionId: string, dinerId: string, assigned: boolean) => {
+    if (assigned) removePortionAssignment(itemId, portionId, dinerId);
+    else assignPortionToDiner(itemId, portionId, dinerId);
   };
 
   const toggleSplitAll = (itemId: string, portionId: string, isCurrentlyAssignedToAll: boolean) => {
@@ -173,194 +166,180 @@ export default function ItemAssignment() {
     }
   };
 
-  const colors = [
-    'from-rose-400 to-rose-600',
-    'from-amber-400 to-amber-600',
-    'from-emerald-400 to-emerald-600',
-    'from-sky-400 to-sky-600',
-    'from-violet-400 to-violet-600',
-    'from-fuchsia-400 to-fuchsia-600',
-  ];
+  const dinerIndex = new Map(meal.diners.map((d, i) => [d.id, i]));
+  const unassignedCount = portionEntries.filter((p) => p.assignments.length === 0).length;
+  const selected = portionEntries.find((p) => p.portionId === selectedPortionId) ?? null;
 
   return (
-    <div className="card p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center shadow-lg shadow-primary-500/20">
-          <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-          </svg>
-        </div>
-        <div>
-          <h2 className="text-xl font-bold text-stone-800">Assign Items</h2>
-          <p className="text-sm text-stone-500">Drag items into buckets · Tap ∀ to split among everyone · Items highlighted in red still need assignment</p>
-        </div>
+    <div className="card p-5 sm:p-6">
+      <h2 className="font-serif text-2xl font-medium tracking-tight text-ink">Who had what?</h2>
+      <p className="text-sm text-ink-muted mt-0.5 mb-4">
+        Tap an item, then tap everyone who had it. You can also drag items onto people below.
+      </p>
+
+      {/* Items */}
+      <div className="flex items-baseline justify-between mb-2">
+        <h3 className="font-semibold text-ink">Items</h3>
+        <span className={`text-sm ${unassignedCount ? 'text-[#b8432b] font-medium' : 'text-ink-muted'}`}>
+          {unassignedCount ? `${unassignedCount} still need someone` : 'All assigned'}
+        </span>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+        {portionEntries.map((portion) => {
+          const isAssigned = portion.assignments.length > 0;
+          const isSelected = selectedPortionId === portion.portionId;
+          const isDragging = draggingPortionId === portion.portionId;
+          return (
+            <div
+              key={portion.portionId}
+              role="button"
+              tabIndex={0}
+              aria-pressed={isSelected}
+              draggable
+              onDragStart={handleDragStart(portion.itemId, portion.portionId)}
+              onDragEnd={handleDragEnd}
+              onClick={() => setSelectedPortionId(isSelected ? null : portion.portionId)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  setSelectedPortionId(isSelected ? null : portion.portionId);
+                }
+              }}
+              className={`relative text-left rounded-lg px-3 py-2.5 cursor-pointer select-none transition-colors border-[1.5px]
+                ${isDragging ? 'opacity-50' : ''}
+                ${isSelected
+                  ? 'border-ink bg-white'
+                  : isAssigned
+                  ? 'border-rule bg-white hover:border-stone-400'
+                  : 'border-dashed border-[#d2553b] bg-[#fdf3f0] hover:bg-[#fbe9e4]'}`}
+            >
+              <p className="text-[15px] font-medium text-ink leading-snug line-clamp-2">{portion.itemName}</p>
+              <div className="flex items-center justify-between mt-1.5 gap-2">
+                <span className="money text-sm text-ink-muted">
+                  {formatCurrency(portion.amount)}
+                  {portion.portionCount > 1 && <span className="font-sans tracking-normal"> · {portion.portionIndex} of {portion.portionCount}</span>}
+                </span>
+                {isAssigned ? (
+                  <span className="flex -space-x-1">
+                    {portion.assignments.slice(0, 5).map((a) => (
+                      <span
+                        key={a.dinerId}
+                        className="w-3 h-3 rounded-full ring-2 ring-white"
+                        style={{ backgroundColor: personColor(dinerIndex.get(a.dinerId) ?? 0) }}
+                      />
+                    ))}
+                    {portion.assignments.length > 5 && <span className="text-[11px] text-ink-muted pl-1.5">+{portion.assignments.length - 5}</span>}
+                  </span>
+                ) : (
+                  <span className="text-xs font-medium text-[#b8432b]">No one yet</span>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
 
-      {/* TOP: Food Items Grid */}
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-stone-600 uppercase tracking-wide">Food Items</h3>
-          <span className="text-xs text-stone-400">{portionEntries.length} portion{portionEntries.length !== 1 ? 's' : ''}</span>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {portionEntries.map((portion) => {
-            const isAssigned = portion.assignments.length > 0;
-            const isDragging = draggingPortionId === portion.portionId;
-            const isAssignedToAll = portion.assignments.length === meal.diners.length;
-
-            return (
-              <div
-                key={portion.portionId}
-                draggable
-                onDragStart={handleDragStart(portion.itemId, portion.portionId)}
-                onDragEnd={handleDragEnd}
-                className={`
-                  group relative flex flex-col items-center justify-center
-                  w-20 h-20 rounded-xl cursor-grab active:cursor-grabbing
-                  transition-all duration-200
-                  ${isDragging ? 'opacity-50 scale-95' : 'hover:scale-105 hover:shadow-lg'}
-                  ${isAssigned
-                    ? 'bg-white border-2 border-stone-200 shadow-sm'
-                    : 'bg-red-50 border-2 border-red-400 shadow-md shadow-red-100'
-                  }
-                `}
-              >
-                {/* Item icon */}
-                <div className={`text-2xl mb-0.5 ${isAssigned ? 'grayscale-0' : ''}`}>
-                  🍽️
-                </div>
-                {/* Item name (truncated) */}
-                <p className="text-[10px] font-semibold text-stone-700 text-center leading-tight px-1 truncate max-w-full">
-                  {portion.itemName}
-                </p>
-                {/* Price */}
-                <p className="text-[9px] text-stone-500">{formatCurrency(portion.amount)}</p>
-                {/* Portion number badge */}
-                {portion.portionCount > 1 && (
-                  <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-stone-600 text-white text-[9px] font-bold flex items-center justify-center">
-                    {portion.portionIndex}
-                  </span>
-                )}
-                {/* Assignment count indicator */}
-                {isAssigned && (
-                  <span className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-emerald-500 text-white text-[9px] font-bold flex items-center justify-center shadow">
-                    {portion.assignments.length}
-                  </span>
-                )}
-                {/* Split among all / Clear all button */}
+      {/* Tap-to-assign panel for the picked item */}
+      {selected && (
+        <div className="mt-3 rounded-lg bg-paper-shade p-3" aria-live="polite">
+          <div className="flex items-baseline justify-between gap-3 mb-2.5">
+            <p className="text-sm text-ink">
+              Who had <span className="font-semibold">{selected.itemName}</span>
+              {selected.portionCount > 1 && ` (${selected.portionIndex} of ${selected.portionCount})`}?
+            </p>
+            <button onClick={() => setSelectedPortionId(null)} className="text-sm font-medium text-ink-muted hover:text-ink shrink-0">Done</button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {meal.diners.map((diner, idx) => {
+              const on = selected.assignments.some((a) => a.dinerId === diner.id);
+              return (
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleSplitAll(portion.itemId, portion.portionId, isAssignedToAll);
-                  }}
-                  className={`absolute -top-2 -left-2 w-6 h-6 rounded-full text-white text-[10px] font-bold
-                             flex items-center justify-center shadow-md transition-all active:scale-95
-                             ${isAssignedToAll
-                               ? 'bg-emerald-500 hover:bg-red-500'
-                               : 'bg-primary-500 hover:bg-primary-600'
-                             }`}
-                  title={isAssignedToAll ? "Clear all assignments" : "Split among all"}
+                  key={diner.id}
+                  onClick={() => toggleDiner(selected.itemId, selected.portionId, diner.id, on)}
+                  aria-pressed={on}
+                  className={`flex items-center gap-1.5 pl-1 pr-3 py-1 rounded-full border-[1.5px] text-sm font-medium transition-colors ${
+                    on ? 'text-white' : 'bg-white text-ink border-rule hover:border-stone-400'
+                  }`}
+                  style={on ? { backgroundColor: personColor(idx), borderColor: personColor(idx) } : undefined}
                 >
-                  {isAssignedToAll ? '✓' : '∀'}
+                  <span
+                    className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold"
+                    style={on ? { backgroundColor: 'rgba(255,255,255,.22)' } : { backgroundColor: personColor(idx), color: '#fff' }}
+                  >
+                    {on ? '✓' : diner.name.charAt(0).toUpperCase()}
+                  </span>
+                  {diner.name}
                 </button>
-              </div>
-            );
-          })}
+              );
+            })}
+            <button
+              onClick={() => toggleSplitAll(selected.itemId, selected.portionId, selected.assignments.length === meal.diners.length)}
+              className="px-3 py-1 rounded-full border-[1.5px] border-dashed border-stone-400 text-sm font-medium text-ink hover:bg-white"
+            >
+              {selected.assignments.length === meal.diners.length ? 'Clear' : 'Everyone'}
+            </button>
+          </div>
         </div>
-      </section>
+      )}
 
-      {/* Divider */}
-      <div className="flex items-center gap-4">
-        <div className="flex-1 h-px bg-stone-200" />
-        <span className="text-xs text-stone-400 font-medium">↓ Drag into multiple buckets to split a shared dish ↓</span>
-        <div className="flex-1 h-px bg-stone-200" />
+      {/* People */}
+      <h3 className="font-semibold text-ink mt-6 mb-2">People</h3>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {meal.diners.map((diner, dinerIdx) => {
+          const assignedPortions = portionEntries.filter((portion) =>
+            portion.assignments.some((a) => a.dinerId === diner.id)
+          );
+          const totalAmount = assignedPortions.reduce((sum, p) => sum + p.amount / p.assignments.length, 0);
+          const isDropTarget = activeBucketId === diner.id;
+
+          return (
+            <div
+              key={diner.id}
+              onDragOver={(event) => {
+                event.preventDefault();
+                event.dataTransfer.dropEffect = 'copy';
+              }}
+              onDragEnter={() => setActiveBucketId(diner.id)}
+              onDragLeave={(e) => {
+                if (!e.currentTarget.contains(e.relatedTarget as Node)) setActiveBucketId(null);
+              }}
+              onDrop={handleDrop(diner.id)}
+              className={`rounded-lg border-[1.5px] bg-white p-3 transition-colors ${isDropTarget ? 'border-ink bg-paper-shade' : 'border-rule'}`}
+              style={{ borderLeftColor: personColor(dinerIdx), borderLeftWidth: 4 }}
+            >
+              <div className="flex items-center gap-2.5 mb-2">
+                <PersonAvatar name={diner.name} index={dinerIdx} size="sm" />
+                <p className="flex-1 min-w-0 font-semibold text-ink truncate">{diner.name}</p>
+                <p className="money text-[15px] font-medium text-ink">{formatCurrency(totalAmount)}</p>
+              </div>
+              {assignedPortions.length === 0 ? (
+                <p className="text-sm text-ink-muted py-1">Nothing yet</p>
+              ) : (
+                <ul className="flex flex-wrap gap-1.5">
+                  {assignedPortions.map((portion) => (
+                    <li
+                      key={`${diner.id}-${portion.portionId}`}
+                      className="flex items-center gap-1 pl-2.5 pr-1 py-0.5 rounded-full bg-paper-shade text-[13px] text-ink"
+                    >
+                      <span className="max-w-[9rem] truncate">{portion.itemName}</span>
+                      {portion.assignments.length > 1 && (
+                        <span className="text-ink-muted">÷{portion.assignments.length}</span>
+                      )}
+                      <button
+                        onClick={() => removePortionAssignment(portion.itemId, portion.portionId, diner.id)}
+                        className="w-5 h-5 rounded-full text-stone-500 hover:bg-white hover:text-red-600 flex items-center justify-center"
+                        aria-label={`Remove ${portion.itemName} from ${diner.name}`}
+                      >
+                        ×
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          );
+        })}
       </div>
-
-      {/* BOTTOM: Diner Buckets */}
-      <section className="space-y-3">
-        <h3 className="text-sm font-semibold text-stone-600 uppercase tracking-wide">Diners</h3>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {meal.diners.map((diner, dinerIdx) => {
-            const assignedPortions = portionEntries.filter((portion) =>
-              portion.assignments.some((a) => a.dinerId === diner.id)
-            );
-            const totalAmount = assignedPortions.reduce((sum, p) => sum + p.amount / p.assignments.length, 0);
-
-            return (
-              <div
-                key={diner.id}
-                onDragOver={(event) => {
-                  event.preventDefault();
-                  event.dataTransfer.dropEffect = 'copy';
-                }}
-                onDragEnter={() => setActiveBucketId(diner.id)}
-                onDragLeave={(e) => {
-                  // Only clear if leaving the bucket entirely
-                  if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-                    setActiveBucketId(null);
-                  }
-                }}
-                onDrop={handleDrop(diner.id)}
-                className={`
-                  rounded-2xl border-2 border-dashed p-4 transition-all duration-200
-                  ${activeBucketId === diner.id
-                    ? 'border-primary-400 bg-primary-50 scale-[1.02] shadow-lg'
-                    : 'border-stone-200 bg-stone-50 hover:border-stone-300'
-                  }
-                `}
-              >
-                {/* Bucket header */}
-                <div className="flex items-center gap-3 mb-3">
-                  <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${colors[dinerIdx % colors.length]} text-white font-bold flex items-center justify-center shadow-md`}>
-                    {diner.name.charAt(0).toUpperCase()}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-stone-800 truncate">{diner.name}</p>
-                    <p className="text-xs text-stone-500">
-                      {assignedPortions.length} item{assignedPortions.length !== 1 ? 's' : ''} · {formatCurrency(totalAmount)}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Bucket contents */}
-                <div className="min-h-[80px]">
-                  {assignedPortions.length === 0 ? (
-                    <div className="h-[80px] flex items-center justify-center">
-                      <p className="text-xs text-stone-400">Drop items here</p>
-                    </div>
-                  ) : (
-                    <div className="flex flex-wrap gap-1.5">
-                      {assignedPortions.map((portion) => (
-                        <div
-                          key={`${diner.id}-${portion.portionId}`}
-                          className="group relative flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white border border-stone-200 shadow-sm"
-                        >
-                          <span className="text-xs">🍽️</span>
-                          <span className="text-[11px] font-medium text-stone-700 max-w-[60px] truncate">
-                            {portion.itemName}
-                          </span>
-                          {portion.portionCount > 1 && (
-                            <span className="text-[9px] text-stone-400">#{portion.portionIndex}</span>
-                          )}
-                          <button
-                            onClick={() => removePortionAssignment(portion.itemId, portion.portionId, diner.id)}
-                            className="w-4 h-4 rounded-full bg-stone-100 text-stone-400 hover:bg-red-100 hover:text-red-500 
-                                       flex items-center justify-center text-[10px] transition-colors"
-                            aria-label={`Remove ${portion.itemName}`}
-                          >
-                            ×
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </section>
     </div>
   );
 }

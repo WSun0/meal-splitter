@@ -34,8 +34,8 @@ export default function SharedSplitPage() {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <div className="w-12 h-12 rounded-full border-4 border-stone-200 border-t-primary-500 animate-spin mx-auto mb-4" />
-          <p className="text-stone-500">Loading split...</p>
+          <div className="w-12 h-12 rounded-full border-4 border-folder-line border-t-secondary-400 animate-spin mx-auto mb-4" />
+          <p className="text-folder-muted">Loading split…</p>
         </div>
       </div>
     );

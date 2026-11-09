@@ -16,7 +16,7 @@ interface MealContextType {
   resumeDraft: () => void;
   discardDraft: () => void;
   createMeal: (title: string, restaurant?: string, date?: string) => void;
-  updateMealInfo: (updates: { title?: string; restaurant?: string; date?: string }) => void;
+  updateMealInfo: (updates: { title?: string; restaurant?: string; date?: string; payerId?: string | null }) => void;
   addDiner: (name: string) => void;
   removeDiner: (dinerId: string) => void;
   updateDiner: (dinerId: string, name: string) => void;
@@ -117,7 +117,7 @@ export function MealProvider({ children }: { children: ReactNode }) {
     setMeal(newMeal);
   };
 
-  const updateMealInfo = (updates: { title?: string; restaurant?: string; date?: string }) => {
+  const updateMealInfo = (updates: { title?: string; restaurant?: string; date?: string; payerId?: string | null }) => {
     setMeal((prevMeal) => {
       if (!prevMeal) return prevMeal;
       return {
@@ -125,6 +125,7 @@ export function MealProvider({ children }: { children: ReactNode }) {
         ...(updates.title !== undefined && { title: updates.title }),
         ...(updates.restaurant !== undefined && { restaurant: updates.restaurant }),
         ...(updates.date !== undefined && { date: updates.date }),
+        ...(updates.payerId !== undefined && { payerId: updates.payerId ?? undefined }),
       };
     });
   };
@@ -160,6 +161,7 @@ export function MealProvider({ children }: { children: ReactNode }) {
         diners: prevMeal.diners.filter((d) => d.id !== dinerId),
         items: updatedItems,
         adjustments: prevMeal.adjustments.filter((adj) => adj.personId !== dinerId),
+        payerId: prevMeal.payerId === dinerId ? undefined : prevMeal.payerId,
       };
     });
   };

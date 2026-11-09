@@ -31,7 +31,7 @@ async function generateIcons() {
         bottom: padding,
         left: padding,
         right: padding,
-        background: '#f46d4d'
+        background: '#14322a'
       })
       .png()
       .toFile(path.join(outputDir, `icon-maskable-${size}x${size}.png`));

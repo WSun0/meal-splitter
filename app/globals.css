@@ -1,58 +1,78 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400..700&family=Newsreader:opsz,wght@6..72,400..700&family=JetBrains+Mono:wght@400..700&display=swap');
 @import "tailwindcss";
 
+/*
+ * Theme: the check folder.
+ * The app background is the deep green of a restaurant check presenter; every
+ * piece of content is a sheet of paper laid on it. Brass is used only on the
+ * green (brand, active step, the main call to action). Money is set in a
+ * monospaced face, like a printed receipt. Color on paper means "which person".
+ */
 @theme {
-  /* Font family */
-  --font-sans: 'Plus Jakarta Sans', system-ui, sans-serif;
-  
-  /* Primary - warm coral */
-  --color-primary-50: #fff5f3;
-  --color-primary-100: #ffe8e3;
-  --color-primary-200: #ffd5cc;
-  --color-primary-300: #ffb3a3;
-  --color-primary-400: #ff8a72;
-  --color-primary-500: #f46d4d;
-  --color-primary-600: #e14d2d;
-  --color-primary-700: #bd3d21;
-  --color-primary-800: #9c351f;
-  --color-primary-900: #823220;
-  
-  /* Secondary - soft sage */
-  --color-secondary-50: #f4f9f6;
-  --color-secondary-100: #e0efe8;
-  --color-secondary-200: #c3dfd2;
-  --color-secondary-300: #97c7b3;
-  --color-secondary-400: #6aab90;
-  --color-secondary-500: #4a9175;
-  --color-secondary-600: #39745d;
-  --color-secondary-700: #305e4c;
-  --color-secondary-800: #2a4c3f;
-  --color-secondary-900: #253f35;
-  
-  /* Neutral - warm stone */
-  --color-stone-50: #fafaf9;
-  --color-stone-100: #f5f5f4;
-  --color-stone-200: #e7e5e4;
-  --color-stone-300: #d6d3d1;
-  --color-stone-400: #a8a29e;
-  --color-stone-500: #78716c;
-  --color-stone-600: #57534e;
-  --color-stone-700: #44403c;
-  --color-stone-800: #292524;
-  --color-stone-900: #1c1917;
-  
-  /* Shadows - softer, more diffused */
-  --shadow-soft: 0 2px 8px -2px rgba(0, 0, 0, 0.05), 0 4px 16px -4px rgba(0, 0, 0, 0.08);
-  --shadow-soft-lg: 0 4px 12px -2px rgba(0, 0, 0, 0.06), 0 8px 24px -4px rgba(0, 0, 0, 0.1);
-  --shadow-soft-xl: 0 8px 20px -4px rgba(0, 0, 0, 0.08), 0 16px 40px -8px rgba(0, 0, 0, 0.12);
-  --shadow-glow: 0 0 20px rgba(244, 109, 77, 0.15);
-  
-  /* Border radius - more rounded */
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-xl: 24px;
-  --radius-2xl: 32px;
+  --font-sans: 'Familjen Grotesk', system-ui, sans-serif;
+  --font-serif: 'Newsreader', Georgia, serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  /* The folder */
+  --color-folder: #14322a;
+  --color-folder-deep: #0f2822;
+  --color-folder-line: #2b4a41;
+  --color-folder-text: #eaf0eb;
+  --color-folder-muted: #a7bcb2;
+
+  /* The paper */
+  --color-paper: #fbfaf6;
+  --color-paper-shade: #f2f0e8;
+  --color-ink: #1f2622;
+  --color-ink-muted: #68716b;
+  --color-rule: #e6e3da;
+  --color-rule-dashed: #c9c6ba;
+
+  /* Primary: ink green, for actions on paper */
+  --color-primary-50: #f0f4f1;
+  --color-primary-100: #e1eae5;
+  --color-primary-200: #c4d6cc;
+  --color-primary-300: #9bbaab;
+  --color-primary-400: #5d8a79;
+  --color-primary-500: #2a5a4b;
+  --color-primary-600: #14322a;
+  --color-primary-700: #0f2822;
+  --color-primary-800: #0b1e19;
+  --color-primary-900: #07140f;
+
+  /* Secondary: brass */
+  --color-secondary-50: #fbf6e8;
+  --color-secondary-100: #f5ebd0;
+  --color-secondary-200: #ecd7a3;
+  --color-secondary-300: #e2c47b;
+  --color-secondary-400: #d9b45b;
+  --color-secondary-500: #c49a3c;
+  --color-secondary-600: #9f7b2c;
+  --color-secondary-700: #7b5f22;
+  --color-secondary-800: #5b461a;
+  --color-secondary-900: #3c2e12;
+
+  /* Neutral, tinted toward the paper */
+  --color-stone-50: #f7f6f1;
+  --color-stone-100: #f1efe8;
+  --color-stone-200: #e6e3da;
+  --color-stone-300: #d3d0c5;
+  --color-stone-400: #a39f93;
+  --color-stone-500: #7a776d;
+  --color-stone-600: #5c5a52;
+  --color-stone-700: #45443e;
+  --color-stone-800: #2a2b27;
+  --color-stone-900: #1f2622;
+
+  --shadow-soft: 0 1px 0 rgba(0, 0, 0, 0.18), 0 10px 28px -14px rgba(0, 0, 0, 0.55);
+  --shadow-soft-lg: var(--shadow-soft);
+  --shadow-soft-xl: var(--shadow-soft);
+
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 12px;
+  --radius-2xl: 16px;
 }
 
 * {
@@ -61,80 +81,78 @@
 
 html {
   scroll-behavior: smooth;
+  background: var(--color-folder);
 }
 
 body {
   font-family: var(--font-sans);
-  background: linear-gradient(135deg, #fafaf9 0%, #f5f5f4 50%, #faf5f3 100%);
+  background: var(--color-folder);
   min-height: 100vh;
-  color: var(--color-stone-800);
+  color: var(--color-folder-text);
+  font-size: 16px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Selection styling */
 ::selection {
-  background: var(--color-primary-200);
-  color: var(--color-primary-900);
+  background: var(--color-secondary-200);
+  color: var(--color-ink);
 }
 
-/* Scrollbar styling */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+:focus-visible {
+  outline: 2px solid var(--color-secondary-400);
+  outline-offset: 2px;
 }
 
-::-webkit-scrollbar-track {
-  background: transparent;
+/* Money: printed-receipt figures */
+.money {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
 }
 
-::-webkit-scrollbar-thumb {
-  background: var(--color-stone-300);
-  border-radius: 100px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: var(--color-stone-400);
-}
-
-/* Modern card styles */
-.card {
-  background: white;
+/* A sheet of paper on the folder. Everything inside defaults to ink. */
+.card,
+.card-elevated,
+.card-glass,
+.paper {
+  background: var(--color-paper);
+  color: var(--color-ink);
   border-radius: var(--radius-xl);
-  border: 1px solid rgba(0, 0, 0, 0.04);
   box-shadow: var(--shadow-soft);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.card:hover {
-  box-shadow: var(--shadow-soft-lg);
 }
 
 .card-elevated {
-  background: white;
-  border-radius: var(--radius-xl);
-  border: 1px solid rgba(0, 0, 0, 0.03);
-  box-shadow: var(--shadow-soft-lg);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform 0.15s ease;
 }
 
 .card-elevated:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-soft-xl);
+  transform: translateY(-1px);
 }
 
-/* Glassmorphism card */
-.card-glass {
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-radius: var(--radius-xl);
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  box-shadow: var(--shadow-soft);
+/* The receipt slip: torn bottom edge */
+.slip-torn {
+  --tooth: 9px;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  padding-bottom: calc(1.5rem + var(--tooth));
+  -webkit-mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% / calc(2 * var(--tooth)) 100%;
+  mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% / calc(2 * var(--tooth)) 100%;
+  filter: drop-shadow(0 10px 14px rgba(0, 0, 0, 0.35));
+  box-shadow: none;
 }
 
-/* Modern button styles */
-.btn-primary {
+/* Dashed receipt rule */
+.rule-dashed {
+  border: 0;
+  border-top: 1.5px dashed var(--color-rule-dashed);
+}
+
+/* Buttons */
+.btn-primary,
+.btn-secondary,
+.btn-ghost,
+.btn-cta {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -142,77 +160,86 @@ body {
   padding: 0.75rem 1.5rem;
   font-weight: 600;
   font-size: 0.9375rem;
-  background: linear-gradient(135deg, var(--color-primary-500) 0%, var(--color-primary-600) 100%);
-  color: white;
-  border: none;
-  border-radius: var(--radius-lg);
+  border-radius: 999px;
+  border: 1.5px solid transparent;
   cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 2px 8px rgba(244, 109, 77, 0.25);
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+/* On paper: solid ink green */
+.btn-primary {
+  background: var(--color-primary-600);
+  color: var(--color-paper);
 }
 
 .btn-primary:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 16px rgba(244, 109, 77, 0.35);
+  background: var(--color-primary-500);
 }
 
-.btn-primary:active {
-  transform: translateY(0);
-}
-
+/* On paper: outlined */
 .btn-secondary {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1.5rem;
-  font-weight: 600;
-  font-size: 0.9375rem;
-  background: linear-gradient(135deg, var(--color-secondary-500) 0%, var(--color-secondary-600) 100%);
-  color: white;
-  border: none;
-  border-radius: var(--radius-lg);
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 2px 8px rgba(74, 145, 117, 0.25);
+  background: transparent;
+  color: var(--color-ink);
+  border-color: var(--color-ink);
 }
 
 .btn-secondary:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 16px rgba(74, 145, 117, 0.35);
+  background: var(--color-paper-shade);
 }
 
+/* On paper: quiet */
 .btn-ghost {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1.5rem;
+  background: var(--color-paper-shade);
+  color: var(--color-ink);
   font-weight: 500;
-  font-size: 0.9375rem;
-  background: var(--color-stone-100);
-  color: var(--color-stone-700);
-  border: none;
-  border-radius: var(--radius-lg);
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .btn-ghost:hover {
-  background: var(--color-stone-200);
+  background: var(--color-rule);
 }
 
-/* Modern input styles */
+/* On the folder: brass, the one loud thing */
+.btn-cta {
+  background: var(--color-secondary-400);
+  color: var(--color-folder-deep);
+  font-weight: 700;
+}
+
+.btn-cta:hover {
+  background: var(--color-secondary-300);
+}
+
+/* On the folder: quiet */
+.btn-folder {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.5rem 0.875rem;
+  font-weight: 500;
+  font-size: 0.875rem;
+  color: var(--color-folder-text);
+  border: 1px solid var(--color-folder-line);
+  border-radius: 999px;
+  background: transparent;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.btn-folder:hover {
+  background: var(--color-folder-deep);
+}
+
+/* Inputs */
 .input {
   width: 100%;
   padding: 0.75rem 1rem;
-  font-size: 0.9375rem;
+  font-size: 1rem;
   font-family: var(--font-sans);
-  color: var(--color-stone-800);
-  background: var(--color-stone-50);
-  border: 2px solid transparent;
+  color: var(--color-ink);
+  background: var(--color-paper-shade);
+  border: 1.5px solid transparent;
   border-radius: var(--radius-lg);
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .input::placeholder {
@@ -220,51 +247,45 @@ body {
 }
 
 .input:hover {
-  background: white;
-  border-color: var(--color-stone-200);
+  border-color: var(--color-rule);
 }
 
 .input:focus {
   outline: none;
-  background: white;
-  border-color: var(--color-primary-400);
-  box-shadow: 0 0 0 4px var(--color-primary-100);
+  background: #fff;
+  border-color: var(--color-primary-600);
+  box-shadow: 0 0 0 3px var(--color-primary-100);
 }
 
-/* Invalid field: red border and tint, shown after the user leaves it empty */
 .input[aria-invalid="true"] {
-  background: var(--color-red-50, #fef2f2);
-  border-color: var(--color-red-400, #f87171);
+  background: #fdf1ee;
+  border-color: #d2553b;
 }
 
 .input[aria-invalid="true"]:focus {
-  border-color: var(--color-red-500, #ef4444);
-  box-shadow: 0 0 0 4px var(--color-red-100, #fee2e2);
+  border-color: #b8432b;
+  box-shadow: 0 0 0 3px #f8ddd6;
 }
 
-/* Input with a leading symbol like "$" */
 .input.input-prefixed {
   padding-left: 1.75rem;
 }
 
-/* Label */
 .label {
   display: block;
-  margin-bottom: 0.5rem;
-  font-size: 0.8125rem;
+  margin-bottom: 0.375rem;
+  font-size: 0.875rem;
   font-weight: 600;
-  color: var(--color-stone-600);
-  letter-spacing: 0.02em;
+  color: var(--color-ink-muted);
 }
 
-/* Badge styles */
 .badge {
   display: inline-flex;
   align-items: center;
-  padding: 0.25rem 0.75rem;
+  padding: 0.125rem 0.625rem;
   font-size: 0.75rem;
   font-weight: 600;
-  border-radius: 100px;
+  border-radius: 999px;
 }
 
 .badge-primary {
@@ -274,18 +295,17 @@ body {
 
 .badge-secondary {
   background: var(--color-secondary-100);
-  color: var(--color-secondary-700);
+  color: var(--color-secondary-800);
 }
 
 .badge-warning {
-  background: #fef3c7;
-  color: #92400e;
+  background: #fbefd5;
+  color: #7b4d0e;
 }
 
-/* Divider */
 .divider {
   height: 1px;
-  background: linear-gradient(90deg, transparent, var(--color-stone-200), transparent);
+  background: var(--color-rule);
   margin: 1.5rem 0;
 }
 
@@ -333,17 +353,24 @@ body {
   animation: float 3s ease-in-out infinite;
 }
 
-/* Stagger animation for children */
-.stagger-children > * {
-  opacity: 0;
-  animation: fadeInUp 0.5s ease-out forwards;
+/* Paper sliding out of the folder: one entrance, for the bill slip only */
+@keyframes slipOut {
+  from { transform: translateY(-14px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
 }
 
-.stagger-children > *:nth-child(1) { animation-delay: 0ms; }
-.stagger-children > *:nth-child(2) { animation-delay: 80ms; }
-.stagger-children > *:nth-child(3) { animation-delay: 160ms; }
-.stagger-children > *:nth-child(4) { animation-delay: 240ms; }
-.stagger-children > *:nth-child(5) { animation-delay: 320ms; }
+.animate-slip {
+  animation: slipOut 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
 
 /* Gradient text */
 .gradient-text {
@@ -376,8 +403,8 @@ input[type="checkbox"]:hover {
 }
 
 input[type="checkbox"]:checked {
-  background: var(--color-primary-500);
-  border-color: var(--color-primary-500);
+  background: var(--color-primary-600);
+  border-color: var(--color-primary-600);
 }
 
 input[type="checkbox"]:checked::after {
@@ -438,7 +465,7 @@ select.input {
   -webkit-appearance: none;
   -moz-appearance: none;
   appearance: none;
-  background-color: var(--color-stone-50);
+  background-color: var(--color-paper-shade);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2378716c'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 0.75rem center;
