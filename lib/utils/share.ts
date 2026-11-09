@@ -9,8 +9,8 @@ import { generateMealSummary, calculateItemShareForDiner } from './calculations'
  * cents so nothing drifts through float math on the way over.
  *
  * There are two ways a split travels:
- *   1. Short link  -> /s/<id>, payload stored in Upstash Redis (see /api/share)
- *   2. Fallback    -> /split#<deflate+base64url payload>, used if Redis is down
+ *   1. Short link  -> /s/<id>, payload stored in Vercel Blob (see /api/share)
+ *   2. Fallback    -> /split#<deflate+base64url payload>, used if storage is down
  *                     or not configured. The fragment never hits the server.
  *
  * Legacy v1 links (/split?data=<base64 JSON>) are still decoded.
@@ -331,18 +331,26 @@ export function decodeLegacyShareData(encoded: string): SharedSplit | null {
 // Link creation (client side)
 // ---------------------------------------------------------------------------
 
+/** How long to wait for a short link before falling back to a long one. */
+export const SHORT_LINK_TIMEOUT_MS = 4000;
+
 /**
- * Get a link for this split: a short /s/<id> link if the server can store it,
- * otherwise a self-contained /split#... link.
+ * Get a link for this split: a short /s/<id> link if the server can store it
+ * within SHORT_LINK_TIMEOUT_MS, otherwise a self-contained /split#... link.
+ * Only rejects if `signal` aborts.
  */
 export async function createShareLink(split: SharedSplit, signal?: AbortSignal): Promise<{ url: string; short: boolean }> {
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  const controller = new AbortController();
+  const onAbort = () => controller.abort();
+  signal?.addEventListener('abort', onAbort);
+  const timer = setTimeout(() => controller.abort(), SHORT_LINK_TIMEOUT_MS);
   try {
     const res = await fetch('/api/share', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(toWire(split)),
-      signal,
+      signal: controller.signal,
     });
     if (res.ok) {
       const { id } = (await res.json()) as { id: string };
@@ -350,9 +358,13 @@ export async function createShareLink(split: SharedSplit, signal?: AbortSignal):
         return { url: `${origin}/s/${id}`, short: true };
       }
     }
-  } catch (err) {
-    if ((err as Error)?.name === 'AbortError') throw err;
+  } catch {
+    // network error or timeout: fall through to the long link
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', onAbort);
   }
+  if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
   return { url: `${origin}/split#${await encodeFragment(split)}`, short: false };
 }
 

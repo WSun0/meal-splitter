@@ -1,23 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { WireSchema } from '@/lib/utils/share';
-import { allowShareWrite, getRedis, saveSplit } from '@/lib/server/share-store';
+import { isShareStorageConfigured, saveSplit } from '@/lib/server/share-store';
 
 export const runtime = 'nodejs';
 
 const MAX_BODY_BYTES = 32 * 1024;
 
-function clientIP(req: NextRequest): string {
-  // Vercel sets x-forwarded-for; the first entry is the client.
-  return req.headers.get('x-forwarded-for')?.split(',')[0].trim() || req.headers.get('x-real-ip') || 'unknown';
-}
-
 /**
  * POST /api/share  body: wire-format split  ->  { id }
- * Returns 503 when storage isn't configured; the client then falls back to a
- * self-contained /split#... link.
+ * Returns 503 when storage isn't configured or fails; the client then falls
+ * back to a self-contained /split#... link.
  */
 export async function POST(req: NextRequest) {
-  if (!getRedis()) {
+  if (!isShareStorageConfigured()) {
     return NextResponse.json({ error: 'Short links are not configured' }, { status: 503 });
   }
 
@@ -39,9 +34,6 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    if (!(await allowShareWrite(clientIP(req)))) {
-      return NextResponse.json({ error: 'Too many links, try again later' }, { status: 429 });
-    }
     const id = await saveSplit(parsed.data);
     if (!id) {
       return NextResponse.json({ error: 'Short links are not configured' }, { status: 503 });
