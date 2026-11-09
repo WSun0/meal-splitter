@@ -16,7 +16,7 @@ https://meal-splitter-hazel.vercel.app
 
 ## Architecture Overview
 
-Built with Next.js 16 (App Router), TypeScript, and Tailwind CSS. State management via React Context with localStorage persistence (an unfinished meal from the last 24 hours can be resumed from the landing page). Share links are stored in Upstash Redis.
+Built with Next.js 16 (App Router), TypeScript, and Tailwind CSS. State management via React Context with localStorage persistence (an unfinished meal from the last 24 hours can be resumed from the landing page). Share links are stored in Vercel Blob.
 
 ```
 meal-splitter/
@@ -32,7 +32,7 @@ meal-splitter/
 │   ├── share/               # Shared split view
 │   └── summary/             # Final breakdown, adjustments, export
 └── lib/
-    ├── server/              # Share link storage (Upstash Redis)
+    ├── server/              # Share link storage (Vercel Blob)
     ├── store/               # React Context state management
     ├── types/               # TypeScript type definitions
     └── utils/               # Calculations, share encoding
@@ -164,19 +164,20 @@ const MealContext = createContext<{
 
 ## Share Links
 
-`POST /api/share` validates the split (zod) and stores it in Upstash Redis under a 10-character id derived from a hash of its contents, so sharing the same split twice gives the same link. Links expire after a year; writes are rate limited per IP.
+`POST /api/share` validates the split (zod) and stores it as a small JSON file in Vercel Blob under a 10-character id derived from a hash of its contents, so sharing the same split twice gives the same link. Links don't expire. The share panel prefetches the link once edits settle; tapping Copy before it's ready shows "Generating link…" and copies when it arrives (falling back to a long link after 4 seconds).
 
-If Redis isn't configured or is unreachable, the app falls back to a self-contained link: `/split#<deflate-compressed payload>`. Old `/split?data=` links still work.
+If Blob isn't configured or is unreachable, the app falls back to a self-contained link: `/split#<deflate-compressed payload>`. Old `/split?data=` links still work.
 
 ---
 
 ## Environment Variables
 
 ```env
-# Upstash Redis for short share links. KV_REST_API_URL / KV_REST_API_TOKEN
-# (the names Vercel's Upstash integration sets) also work.
-UPSTASH_REDIS_REST_URL=your_redis_url
-UPSTASH_REDIS_REST_TOKEN=your_redis_token
+# Vercel Blob, for short share links. Set automatically when a Blob store is
+# connected to the project in Vercel (Storage tab).
+BLOB_READ_WRITE_TOKEN=your_blob_token
+# Must match the store's access type. Defaults to private.
+# SHARE_BLOB_ACCESS=public
 ```
 
 ---

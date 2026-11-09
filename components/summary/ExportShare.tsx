@@ -3,42 +3,71 @@
 import { useMeal } from '@/lib/store/meal-store';
 import { generateMealSummary, getUnassignedItems } from '@/lib/utils/calculations';
 import { formatCurrency, formatDate } from '@/lib/utils/helpers';
-import { buildSharedSplit, createShareLink, getSettlements } from '@/lib/utils/share';
-import { useState, useEffect, useMemo } from 'react';
+import { buildSharedSplit, createShareLink, getSettlements, toWire } from '@/lib/utils/share';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
+type CopyState = 'idle' | 'generating' | 'copied' | 'error';
+
+/**
+ * Copy text that may still be on its way. Passing a promise to ClipboardItem
+ * keeps the click's user-activation alive while the link is created (Safari
+ * otherwise refuses a clipboard write that happens after an await).
+ */
+async function copyEventually(text: Promise<string>): Promise<void> {
+  if (typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
+    try {
+      const blob = text.then((t) => new Blob([t], { type: 'text/plain' }));
+      await navigator.clipboard.write([new ClipboardItem({ 'text/plain': blob })]);
+      return;
+    } catch {
+      // fall through (older browsers reject promise-valued ClipboardItems)
+    }
+  }
+  await navigator.clipboard.writeText(await text);
+}
 
 export default function ExportShare() {
   const { meal, updateMealInfo } = useMeal();
-  const [copied, setCopied] = useState(false);
-  const [linkCopied, setLinkCopied] = useState(false);
+  const [copyState, setCopyState] = useState<CopyState>('idle');
+  const [linkCopyState, setLinkCopyState] = useState<CopyState>('idle');
   const [payerIdForExport, setPayerIdForExport] = useState('');
   const [shareUrl, setShareUrl] = useState('');
-  const [linkPending, setLinkPending] = useState(true);
 
   const split = useMemo(
     () => (meal ? buildSharedSplit(meal, payerIdForExport || undefined) : null),
     [meal, payerIdForExport]
   );
 
-  // Regenerate the link when the split changes, debounced so typing the meal
-  // name doesn't fire a request per keystroke.
+  // One link request per distinct split, shared by the background prefetch and
+  // the copy buttons. The buttons never wait on a disabled state: if the link
+  // isn't ready, they show "Generating link…" and copy as soon as it is.
+  const splitKey = useMemo(() => (split ? JSON.stringify(toWire(split)) : ''), [split]);
+  const linkRequest = useRef<{ key: string; promise: Promise<string> } | null>(null);
+
+  const getLink = useCallback((): Promise<string> => {
+    if (!split) return Promise.resolve('');
+    if (linkRequest.current?.key !== splitKey) {
+      const promise = createShareLink(split).then(({ url }) => url);
+      linkRequest.current = { key: splitKey, promise };
+      promise.then((url) => {
+        if (linkRequest.current?.key === splitKey) setShareUrl(url);
+      });
+    }
+    return linkRequest.current.promise;
+  }, [split, splitKey]);
+
+  // Prefetch once edits settle, so the link is usually ready before you tap Copy.
   useEffect(() => {
     if (!split) return;
-    setLinkPending(true);
-    const controller = new AbortController();
-    const timer = setTimeout(async () => {
-      try {
-        const { url } = await createShareLink(split, controller.signal);
-        setShareUrl(url);
-        setLinkPending(false);
-      } catch {
-        // aborted by a newer edit
-      }
-    }, 400);
-    return () => {
-      clearTimeout(timer);
-      controller.abort();
-    };
-  }, [split]);
+    setShareUrl('');
+    const timer = setTimeout(() => void getLink(), 700);
+    return () => clearTimeout(timer);
+  }, [split, getLink]);
+
+  const flash = (set: (s: CopyState) => void, state: CopyState) => {
+    set(state);
+    setTimeout(() => set('idle'), 2000);
+  };
 
   if (!meal || !split) return null;
 
@@ -47,7 +76,7 @@ export default function ExportShare() {
   const settlements = getSettlements(split);
   const money = (cents: number) => formatCurrency(cents / 100);
 
-  const generateTextSummary = (): string => {
+  const generateTextSummary = (link: string): string => {
     let text = `🍽️ Meal Split Summary\n━━━━━━━━━━━━━━━━━━━\n\n`;
     text += `📍 ${split.title}\n`;
     if (split.restaurant) text += `🏪 ${split.restaurant}\n`;
@@ -66,30 +95,24 @@ export default function ExportShare() {
       if (d.other !== 0) text += `  • Other: ${money(d.other)}\n`;
     });
     text += `\n🧾 Total: ${money(split.total)}\n`;
-    if (shareUrl) text += `\n🔗 Full breakdown: ${shareUrl}\n`;
+    if (link) text += `\n🔗 Full breakdown: ${link}\n`;
     text += `\n✨ Will's Meal Splitting Tool\n`;
     return text;
   };
 
-  const handleCopyToClipboard = async () => {
+  const runCopy = async (set: (s: CopyState) => void, text: Promise<string>) => {
+    if (!shareUrl) set('generating');
     try {
-      await navigator.clipboard.writeText(generateTextSummary());
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      await copyEventually(text);
+      flash(set, 'copied');
     } catch (err) {
       console.error('Failed to copy:', err);
+      flash(set, 'error');
     }
   };
 
-  const handleCopyLink = async () => {
-    try {
-      await navigator.clipboard.writeText(shareUrl);
-      setLinkCopied(true);
-      setTimeout(() => setLinkCopied(false), 2000);
-    } catch (err) {
-      console.error('Failed to copy link:', err);
-    }
-  };
+  const handleCopyToClipboard = () => runCopy(setCopyState, getLink().then(generateTextSummary));
+  const handleCopyLink = () => runCopy(setLinkCopyState, getLink());
 
   // Sanitize string for CSV to prevent formula injection
   const sanitizeForCSV = (value: string): string => {
@@ -176,38 +199,25 @@ export default function ExportShare() {
         <div className="flex gap-2">
           <input
             type="text"
-            value={linkPending && !shareUrl ? 'Generating link…' : shareUrl}
+            value={shareUrl}
+            placeholder="Your link will appear here"
             readOnly
-            aria-busy={linkPending}
-            className="input flex-1 text-sm bg-white/80 text-stone-600"
+            aria-busy={!shareUrl}
+            className="input flex-1 min-w-0 text-sm bg-white/80 text-stone-600 placeholder:text-stone-400"
             onClick={(e) => (e.target as HTMLInputElement).select()}
           />
           <button
             onClick={handleCopyLink}
-            disabled={linkPending}
+            aria-live="polite"
             className={`px-4 py-2.5 rounded-xl font-semibold text-sm transition-all duration-200 flex items-center gap-2 whitespace-nowrap ${
-              linkCopied
+              linkCopyState === 'copied'
                 ? 'bg-green-500 text-white'
-                : linkPending
-                ? 'bg-primary-300 text-white cursor-wait'
+                : linkCopyState === 'error'
+                ? 'bg-red-500 text-white'
                 : 'bg-primary-600 text-white hover:bg-primary-700'
             }`}
           >
-            {linkCopied ? (
-              <>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                Copied!
-              </>
-            ) : (
-              <>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                </svg>
-                Copy
-              </>
-            )}
+            <CopyLabel state={linkCopyState} idle="Copy" />
           </button>
         </div>
       </div>
@@ -215,28 +225,16 @@ export default function ExportShare() {
       <div className="space-y-3">
         <button
           onClick={handleCopyToClipboard}
-          disabled={linkPending}
+          aria-live="polite"
           className={`w-full py-4 px-4 rounded-2xl font-semibold transition-all duration-300 flex items-center justify-center gap-2 ${
-            copied 
-              ? 'bg-gradient-to-r from-green-500 to-green-600 text-white shadow-lg shadow-green-500/25' 
+            copyState === 'copied'
+              ? 'bg-gradient-to-r from-green-500 to-green-600 text-white shadow-lg shadow-green-500/25'
+              : copyState === 'error'
+              ? 'bg-red-500 text-white'
               : 'btn-secondary'
           }`}
         >
-          {copied ? (
-            <>
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-              Copied!
-            </>
-          ) : (
-            <>
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              Copy Full Summary
-            </>
-          )}
+          <CopyLabel state={copyState} idle="Copy Full Summary" large />
         </button>
 
         <button onClick={handleDownloadCSV} className="btn-ghost w-full py-4 border-2 border-stone-200">
@@ -247,5 +245,36 @@ export default function ExportShare() {
         </button>
       </div>
     </div>
+  );
+}
+
+function CopyLabel({ state, idle, large }: { state: CopyState; idle: string; large?: boolean }) {
+  const icon = large ? 'w-5 h-5' : 'w-4 h-4';
+  if (state === 'generating') {
+    return (
+      <>
+        <span className={`${icon} rounded-full border-2 border-current border-t-transparent animate-spin`} aria-hidden />
+        Generating link…
+      </>
+    );
+  }
+  if (state === 'copied') {
+    return (
+      <>
+        <svg className={icon} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+        </svg>
+        Copied!
+      </>
+    );
+  }
+  if (state === 'error') return <>Couldn&apos;t copy, try again</>;
+  return (
+    <>
+      <svg className={icon} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+      </svg>
+      {idle}
+    </>
   );
 }
