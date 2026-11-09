@@ -58,3 +58,16 @@ export function todayLocalISODate(): string {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
+
+/**
+ * One CSV cell, safe to open in Excel/Sheets: quotes are always doubled and
+ * the cell always wrapped, and text a spreadsheet would treat as a formula
+ * (leading = + - @, tab or CR) gets a leading apostrophe. The old version
+ * skipped quote-escaping on the formula branch, so a name like
+ * `-x","=cmd|...` could break out of its cell.
+ */
+export function csvCell(value: string): string {
+  let v = value.replace(/"/g, '""');
+  if (/^[=+\-@\t\r]/.test(v)) v = `'${v}`;
+  return `"${v}"`;
+}

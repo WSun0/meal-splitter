@@ -240,6 +240,39 @@ async function pipeThrough(bytes: Uint8Array, stream: CompressionStream | Decomp
   return new Uint8Array(await new Response(out).arrayBuffer());
 }
 
+/** Largest decoded share payload accepted (real splits are a few KB). */
+export const MAX_SHARE_PAYLOAD_BYTES = 64_000;
+/** Longest fragment accepted before decoding (a 64 KB payload base64s to ~86 KB). */
+const MAX_FRAGMENT_CHARS = 100_000;
+
+/**
+ * Inflate, giving up as soon as the output passes `maxBytes`. Checking only
+ * after inflating let a ~400 KB link expand to hundreds of MB in the viewer's
+ * tab (decompression bomb).
+ */
+async function inflateCapped(bytes: Uint8Array, maxBytes: number): Promise<Uint8Array | null> {
+  const reader = new Blob([bytes as BlobPart]).stream().pipeThrough(new DecompressionStream('deflate-raw')).getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > maxBytes) {
+      await reader.cancel().catch(() => {});
+      return null;
+    }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(size);
+  let offset = 0;
+  for (const c of chunks) {
+    out.set(c, offset);
+    offset += c.byteLength;
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // Fallback link encoding: /split#<encoded>
 // Prefix "z" = deflate-raw compressed, "j" = plain JSON (no CompressionStream)
@@ -259,15 +292,15 @@ export async function encodeFragment(split: SharedSplit): Promise<string> {
 
 export async function decodeFragment(encoded: string): Promise<SharedSplit | null> {
   try {
+    if (encoded.length > MAX_FRAGMENT_CHARS) return null;
     const kind = encoded[0];
-    let bytes = base64UrlToBytes(encoded.slice(1));
+    let bytes: Uint8Array | null = base64UrlToBytes(encoded.slice(1));
     if (kind === 'z') {
-      bytes = await pipeThrough(bytes, new DecompressionStream('deflate-raw'));
+      bytes = await inflateCapped(bytes, MAX_SHARE_PAYLOAD_BYTES);
     } else if (kind !== 'j') {
       return null;
     }
-    // Cap decompressed size to avoid zip-bomb style payloads.
-    if (bytes.length > 64_000) return null;
+    if (!bytes || bytes.length > MAX_SHARE_PAYLOAD_BYTES) return null;
     return fromWire(JSON.parse(new TextDecoder().decode(bytes)));
   } catch {
     return null;
