@@ -17,6 +17,7 @@ interface ItemFormProps {
   submitLabel: string;
   onSubmit: (values: ItemFormValues, priceMode: PriceMode) => void;
   onCancel: () => void;
+  hideCancel?: boolean;
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -44,7 +45,7 @@ function initialPrice(initial: ItemFormValues | undefined, mode: PriceMode): { t
   return { text: initial.amount.toFixed(2), mode };
 }
 
-export default function ItemForm({ initial, defaultPriceMode = 'each', submitLabel, onSubmit, onCancel }: ItemFormProps) {
+export default function ItemForm({ initial, defaultPriceMode = 'each', submitLabel, onSubmit, onCancel, hideCancel }: ItemFormProps) {
   const start = initialPrice(initial, defaultPriceMode);
   const [name, setName] = useState(initial?.name ?? '');
   const [qtyText, setQtyText] = useState(String(initial?.quantity ?? 1));
@@ -91,7 +92,7 @@ export default function ItemForm({ initial, defaultPriceMode = 'each', submitLab
     <div className="space-y-3" onKeyDown={onKeyDown}>
       <div className="grid grid-cols-12 gap-3">
         <div className="col-span-12 sm:col-span-6">
-          <label className="block text-xs font-medium text-stone-500 mb-1" htmlFor={`${id}-name`}>Item</label>
+          <label className="block text-xs font-medium text-ink-muted mb-1" htmlFor={`${id}-name`}>Item</label>
           <input
             id={`${id}-name`}
             type="text"
@@ -107,7 +108,7 @@ export default function ItemForm({ initial, defaultPriceMode = 'each', submitLab
         </div>
 
         <div className="col-span-4 sm:col-span-2">
-          <label className="block text-xs font-medium text-stone-500 mb-1" htmlFor={`${id}-qty`}>Qty</label>
+          <label className="block text-xs font-medium text-ink-muted mb-1" htmlFor={`${id}-qty`}>Qty</label>
           <input
             id={`${id}-qty`}
             type="text"
@@ -172,14 +173,14 @@ export default function ItemForm({ initial, defaultPriceMode = 'each', submitLab
       )}
 
       {multi && qtyValid && lineTotal !== null && unitPrice !== null && (
-        <p className="text-sm text-stone-600 sm:text-right">
-          {qty} × {formatCurrency(unitPrice)} ={' '}
-          <span className="font-semibold text-stone-800">{formatCurrency(lineTotal)}</span>
+        <p className="text-sm text-ink-muted sm:text-right">
+          {qty} × <span className="money">{formatCurrency(unitPrice)}</span> ={' '}
+          <span className="money font-semibold text-ink">{formatCurrency(lineTotal)}</span>
         </p>
       )}
 
       <div className="flex justify-end gap-2">
-        <button type="button" onClick={onCancel} className="btn-ghost text-sm py-2 px-4">Cancel</button>
+        {!hideCancel && <button type="button" onClick={onCancel} className="btn-ghost text-sm py-2 px-4">Cancel</button>}
         <button type="button" onClick={submit} className="btn-primary text-sm py-2 px-4">{submitLabel}</button>
       </div>
     </div>

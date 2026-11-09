@@ -40,286 +40,198 @@ export default function ExtrasManager() {
 
   const calculatedTotal = itemsSubtotal + meal.receiptMeta.tax + meal.receiptMeta.tip + adjustmentsTotal;
 
+  const tipPercents = [15, 18, 20, 22];
+  const currentTipPct = itemsSubtotal > 0 ? (meal.receiptMeta.tip / itemsSubtotal) * 100 : 0;
+
   return (
-    <div className="space-y-6">
-      {/* Tax & Tip Card */}
-      <div className="card p-6">
-        <div className="flex items-center gap-4 mb-6">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center shadow-lg shadow-primary-500/20">
-            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-            </svg>
-          </div>
-          <div>
-            <h2 className="text-xl font-bold text-stone-800">Tax & Tip</h2>
-            <p className="text-sm text-stone-500">Confirm the values from your receipt</p>
-          </div>
+    <div className="card p-5 sm:p-6">
+      <h2 className="font-serif text-2xl font-medium tracking-tight text-ink">Tax &amp; tip</h2>
+      <p className="text-sm text-ink-muted mt-0.5 mb-4">
+        Copy these from the receipt. They&apos;re shared in proportion to what each person ordered.
+      </p>
+
+      <div className="divide-y divide-rule border-y border-rule">
+        <div className="flex items-baseline justify-between py-3">
+          <span className="text-ink">Items <span className="text-ink-muted text-sm">({meal.items.length})</span></span>
+          <span className="money text-[17px] text-ink">{formatCurrency(itemsSubtotal)}</span>
         </div>
 
-        <div className="space-y-4">
-          {/* Items Subtotal (read-only) */}
-          <div className="flex items-center justify-between p-4 bg-stone-50 rounded-2xl">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-stone-200 flex items-center justify-center">
-                <svg className="w-5 h-5 text-stone-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                </svg>
-              </div>
-              <div>
-                <p className="font-semibold text-stone-800">Items Subtotal</p>
-                <p className="text-xs text-stone-500">{meal.items.length} items</p>
-              </div>
-            </div>
-            <p className="text-lg font-bold text-stone-700">{formatCurrency(itemsSubtotal)}</p>
-          </div>
+        <MoneyRow
+          id="tax"
+          label="Tax"
+          value={meal.receiptMeta.tax}
+          onChange={(v) => updateReceiptMeta({ tax: v })}
+        />
 
-          {/* Tax */}
-          <div className="p-4 bg-stone-50 rounded-2xl">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center">
-                  <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                  </svg>
-                </div>
-                <p className="font-semibold text-stone-800">Tax</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-stone-500 font-medium text-lg">$</span>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={meal.receiptMeta.tax || ''}
-                onChange={(e) => updateReceiptMeta({ tax: parseFloat(e.target.value) || 0 })}
-                className="input text-lg font-semibold flex-1 !pl-2"
-                placeholder="0.00"
-              />
-            </div>
-          </div>
-
-          {/* Tip */}
-          <div className="p-4 bg-stone-50 rounded-2xl">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center">
-                  <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                  </svg>
-                </div>
-                <p className="font-semibold text-stone-800">Tip</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-stone-500 font-medium text-lg">$</span>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={meal.receiptMeta.tip || ''}
-                onChange={(e) => updateReceiptMeta({ tip: parseFloat(e.target.value) || 0 })}
-                className="input text-lg font-semibold flex-1 !pl-2"
-                placeholder="0.00"
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Other Adjustments Card */}
-      <div className="card p-6">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-secondary-400 to-secondary-600 flex items-center justify-center shadow-lg shadow-secondary-500/20">
-              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-              </svg>
-            </div>
-            <div>
-              <h2 className="text-xl font-bold text-stone-800">Other Charges</h2>
-              <p className="text-sm text-stone-500">Fees, discounts, or custom adjustments</p>
-            </div>
-          </div>
-          <button 
-            onClick={() => setShowAdjustmentForm(!showAdjustmentForm)} 
-            className={showAdjustmentForm ? 'btn-ghost' : 'btn-secondary'}
-          >
-            {showAdjustmentForm ? 'Cancel' : (
-              <>
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-                Add
-              </>
-            )}
-          </button>
-        </div>
-
-        {showAdjustmentForm && (
-          <form onSubmit={handleAdjustmentSubmit} className="mb-6 p-5 bg-stone-50 rounded-2xl space-y-4">
-            <div>
-              <label className="label">Description</label>
-              <input type="text" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="e.g., Service fee, Birthday discount" className="input" required />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="label">Amount ($)</label>
-                <input type="number" step="0.01" min="0" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" className="input" required />
-              </div>
-              <div>
-                <label className="label">Type</label>
-                <select value={type} onChange={(e) => setType(e.target.value as AdjustmentType)} className="input">
-                  <option value="debit">+ Add to bill</option>
-                  <option value="credit">− Subtract from bill</option>
-                </select>
-              </div>
-            </div>
-            <div>
-              <label className="label">Apply to</label>
-              <select value={scope} onChange={(e) => { setScope(e.target.value as AdjustmentScope); if (e.target.value === 'meal') setPersonId(''); }} className="input">
-                <option value="meal">Everyone (split)</option>
-                <option value="person">One person only</option>
-              </select>
-            </div>
-            {scope === 'person' && meal.diners.length > 0 && (
-              <div>
-                <label className="label">Select Person</label>
-                <select value={personId} onChange={(e) => setPersonId(e.target.value)} className="input" required>
-                  <option value="">Choose...</option>
-                  {meal.diners.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-                </select>
-              </div>
-            )}
-            {scope === 'meal' && (
-              <div>
-                <label className="label">Split Method</label>
-                <select value={allocationRule} onChange={(e) => setAllocationRule(e.target.value as AllocationRule)} className="input">
-                  <option value="proportional">By spending (proportional)</option>
-                  <option value="explicit">Equal split</option>
-                </select>
-              </div>
-            )}
-            <button type="submit" className="btn-secondary w-full">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-              Add Adjustment
-            </button>
-          </form>
-        )}
-
-        {meal.adjustments.length === 0 ? (
-          <div className="text-center py-8 px-4 rounded-2xl bg-stone-50 border-2 border-dashed border-stone-200">
-            <div className="w-12 h-12 rounded-full bg-stone-100 flex items-center justify-center mx-auto mb-3">
-              <svg className="w-6 h-6 text-stone-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 13l4 4L19 7" />
-              </svg>
-            </div>
-            <p className="text-stone-600 font-medium">No additional charges</p>
-            <p className="text-sm text-stone-400 mt-1">Service fees, discounts, etc. can be added above</p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {meal.adjustments.map((adj) => {
-              const diner = adj.personId ? meal.diners.find((d) => d.id === adj.personId) : null;
-              const isCredit = adj.amount < 0;
-              return (
-                <div key={adj.id} className="flex items-center gap-4 p-4 bg-stone-50 rounded-2xl group hover:bg-stone-100 transition-all">
-                  <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${isCredit ? 'bg-gradient-to-br from-green-400 to-green-600' : 'bg-gradient-to-br from-red-400 to-red-500'} shadow-md`}>
-                    {isCredit ? (
-                      <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" /></svg>
-                    ) : (
-                      <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-stone-800">{adj.label}</p>
-                    <p className="text-sm text-stone-500">{adj.scope === 'person' && diner ? diner.name : adj.allocationRule === 'proportional' ? 'Split proportionally' : 'Split equally'}</p>
-                  </div>
-                  <p className={`font-bold text-lg ${isCredit ? 'text-green-600' : 'text-red-500'}`}>
-                    {isCredit ? '−' : '+'}${Math.abs(adj.amount).toFixed(2)}
-                  </p>
-                  <button onClick={() => removeAdjustment(adj.id)} className="p-2 rounded-xl text-stone-400 hover:text-red-500 hover:bg-red-50 transition-all opacity-0 group-hover:opacity-100">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
+        <div className="py-3">
+          <MoneyRow
+            id="tip"
+            label="Tip"
+            value={meal.receiptMeta.tip}
+            onChange={(v) => updateReceiptMeta({ tip: v })}
+            bare
+          />
+          {itemsSubtotal > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-2" role="group" aria-label="Tip as a percentage of items">
+              {tipPercents.map((pct) => {
+                const active = Math.abs(currentTipPct - pct) < 0.05;
+                return (
+                  <button
+                    key={pct}
+                    type="button"
+                    onClick={() => updateReceiptMeta({ tip: Math.round(itemsSubtotal * pct) / 100 })}
+                    aria-pressed={active}
+                    className={`px-3 py-1 rounded-full text-sm font-medium border-[1.5px] transition-colors ${
+                      active ? 'bg-ink text-paper border-ink' : 'border-rule text-ink hover:border-stone-400'
+                    }`}
+                  >
+                    {pct}%
                   </button>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* Summary Preview */}
-      <div className="card p-6 bg-gradient-to-br from-stone-50 to-stone-100">
-        <h3 className="text-lg font-bold text-stone-800 mb-4">Quick Preview</h3>
-        <div className="space-y-2">
-          <div className="flex justify-between text-sm">
-            <span className="text-stone-500">Items Subtotal</span>
-            <span className="font-medium text-stone-700">{formatCurrency(itemsSubtotal)}</span>
-          </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-stone-500">Tax</span>
-            <span className="font-medium text-stone-700">{formatCurrency(meal.receiptMeta.tax)}</span>
-          </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-stone-500">Tip</span>
-            <span className="font-medium text-stone-700">{formatCurrency(meal.receiptMeta.tip)}</span>
-          </div>
-          {adjustmentsTotal !== 0 && (
-            <div className="flex justify-between text-sm">
-              <span className="text-stone-500">Adjustments</span>
-              <span className={`font-medium ${adjustmentsTotal < 0 ? 'text-green-600' : 'text-red-500'}`}>
-                {adjustmentsTotal < 0 ? '−' : '+'}{formatCurrency(Math.abs(adjustmentsTotal))}
-              </span>
+                );
+              })}
+              {meal.receiptMeta.tip > 0 && !tipPercents.some((p) => Math.abs(currentTipPct - p) < 0.05) && (
+                <span className="text-sm text-ink-muted self-center pl-1">{currentTipPct.toFixed(1)}% of items</span>
+              )}
             </div>
           )}
-          <div className="pt-3 mt-3 border-t border-stone-300 flex justify-between">
-            <span className="font-bold text-stone-800">Calculated Total</span>
-            <span className="text-xl font-bold gradient-text">{formatCurrency(calculatedTotal)}</span>
-          </div>
         </div>
 
-        {/* Parsed receipt total comparison */}
-        {meal.receiptMeta.total > 0 && (
-          <div className={`mt-4 p-3 rounded-xl ${
-            Math.abs(calculatedTotal - meal.receiptMeta.total) > 0.02
-              ? 'bg-amber-50 border border-amber-200'
-              : 'bg-stone-100 border border-stone-200'
-          }`}>
-            <div className="flex gap-2 items-start">
-              {Math.abs(calculatedTotal - meal.receiptMeta.total) > 0.02 ? (
-                <svg className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-              ) : (
-                <svg className="w-5 h-5 text-stone-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              )}
-              <div className="text-sm flex-1">
-                <div className="flex justify-between items-center">
-                  <span className={Math.abs(calculatedTotal - meal.receiptMeta.total) > 0.02 ? 'text-amber-800 font-medium' : 'text-stone-600'}>
-                    Parsed Receipt Total
-                  </span>
-                  <span className={Math.abs(calculatedTotal - meal.receiptMeta.total) > 0.02 ? 'text-amber-800 font-medium' : 'text-stone-700 font-medium'}>
-                    {formatCurrency(meal.receiptMeta.total)}
-                  </span>
-                </div>
-                {Math.abs(calculatedTotal - meal.receiptMeta.total) > 0.02 && (
-                  <p className="text-amber-700 mt-1">
-                    Difference of {formatCurrency(Math.abs(calculatedTotal - meal.receiptMeta.total))} from calculated total
-                  </p>
-                )}
-                <p className={`text-xs mt-1 ${Math.abs(calculatedTotal - meal.receiptMeta.total) > 0.02 ? 'text-amber-600' : 'text-stone-400'}`}>
-                  This value was parsed from your receipt. Parsing may not be perfect — please verify the values above are correct.
+        {meal.adjustments.map((adj) => {
+          const diner = adj.personId ? meal.diners.find((d) => d.id === adj.personId) : null;
+          const isCredit = adj.amount < 0;
+          return (
+            <div key={adj.id} className="flex items-center gap-3 py-3">
+              <div className="flex-1 min-w-0">
+                <p className="text-ink">{adj.label}</p>
+                <p className="text-sm text-ink-muted">
+                  {adj.scope === 'person' && diner ? `${diner.name} only` : adj.allocationRule === 'proportional' ? 'Split by what people ordered' : 'Split equally'}
                 </p>
               </div>
+              <span className={`money text-[17px] ${isCredit ? 'text-primary-500' : 'text-ink'}`}>
+                {isCredit ? '−' : '+'}{formatCurrency(Math.abs(adj.amount))}
+              </span>
+              <button
+                onClick={() => removeAdjustment(adj.id)}
+                aria-label={`Remove ${adj.label}`}
+                className="p-2 -mr-2 rounded-full text-stone-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          );
+        })}
+      </div>
+
+      {showAdjustmentForm ? (
+        <form onSubmit={handleAdjustmentSubmit} className="mt-4 p-4 bg-paper-shade rounded-xl space-y-3">
+          <div>
+            <label className="label" htmlFor="adj-label">What is it?</label>
+            <input id="adj-label" type="text" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Service fee, birthday discount…" className="input" required autoFocus />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label" htmlFor="adj-amount">Amount</label>
+              <input id="adj-amount" type="text" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^\d.]/g, ''))} placeholder="0.00" className="input" required />
+            </div>
+            <div>
+              <label className="label" htmlFor="adj-type">Type</label>
+              <select id="adj-type" value={type} onChange={(e) => setType(e.target.value as AdjustmentType)} className="input">
+                <option value="debit">Adds to bill</option>
+                <option value="credit">Takes off bill</option>
+              </select>
             </div>
           </div>
-        )}
+          <div>
+            <label className="label" htmlFor="adj-scope">Who pays it?</label>
+            <select id="adj-scope" value={scope} onChange={(e) => { setScope(e.target.value as AdjustmentScope); if (e.target.value === 'meal') setPersonId(''); }} className="input">
+              <option value="meal">Everyone</option>
+              <option value="person">One person</option>
+            </select>
+          </div>
+          {scope === 'person' && meal.diners.length > 0 && (
+            <div>
+              <label className="label" htmlFor="adj-person">Person</label>
+              <select id="adj-person" value={personId} onChange={(e) => setPersonId(e.target.value)} className="input" required>
+                <option value="">Choose…</option>
+                {meal.diners.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+              </select>
+            </div>
+          )}
+          {scope === 'meal' && (
+            <div>
+              <label className="label" htmlFor="adj-rule">How to split it</label>
+              <select id="adj-rule" value={allocationRule} onChange={(e) => setAllocationRule(e.target.value as AllocationRule)} className="input">
+                <option value="proportional">By what each person ordered</option>
+                <option value="explicit">Equally</option>
+              </select>
+            </div>
+          )}
+          <div className="flex justify-end gap-2 pt-1">
+            <button type="button" onClick={() => setShowAdjustmentForm(false)} className="btn-ghost text-sm py-2 px-4">Cancel</button>
+            <button type="submit" className="btn-primary text-sm py-2 px-4">Add charge</button>
+          </div>
+        </form>
+      ) : (
+        <button
+          onClick={() => setShowAdjustmentForm(true)}
+          className="mt-3 text-sm font-medium text-ink-muted hover:text-ink underline underline-offset-2 decoration-rule-dashed"
+        >
+          Add a fee or discount
+        </button>
+      )}
+
+      <hr className="rule-dashed mt-5 mb-3" />
+      <div className="flex justify-between items-baseline">
+        <span className="font-semibold text-ink">Total</span>
+        <span className="money text-2xl font-semibold text-ink">{formatCurrency(calculatedTotal)}</span>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A receipt line with an editable amount. Keeps the raw text while typing so
+ * the field can be cleared and retyped; commits a number on every change.
+ */
+function MoneyRow({ id, label, value, onChange, bare }: {
+  id: string;
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+  bare?: boolean;
+}) {
+  const [text, setText] = useState(value ? value.toFixed(2) : '');
+  const [lastValue, setLastValue] = useState(value);
+  // Sync when the value changes from outside (e.g. a tip % button).
+  if (value !== lastValue) {
+    setLastValue(value);
+    if (Math.abs((parseFloat(text) || 0) - value) > 0.001) setText(value ? value.toFixed(2) : '');
+  }
+  return (
+    <div className={`flex items-center justify-between gap-4 ${bare ? '' : 'py-3'}`}>
+      <label htmlFor={`extras-${id}`} className="text-ink">{label}</label>
+      <div className="relative w-36">
+        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 pointer-events-none">$</span>
+        <input
+          id={`extras-${id}`}
+          type="text"
+          inputMode="decimal"
+          value={text}
+          placeholder="0.00"
+          onFocus={(e) => e.target.select()}
+          onChange={(e) => {
+            const cleaned = e.target.value.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1');
+            setText(cleaned);
+            const n = parseFloat(cleaned);
+            const next = Number.isFinite(n) ? Math.round(n * 100) / 100 : 0;
+            setLastValue(next);
+            onChange(next);
+          }}
+          onBlur={() => setText(value ? value.toFixed(2) : '')}
+          className="input input-prefixed money text-right py-2"
+        />
       </div>
     </div>
   );
