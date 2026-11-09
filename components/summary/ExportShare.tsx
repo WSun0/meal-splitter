@@ -32,6 +32,13 @@ export default function ExportShare() {
   const [copyState, setCopyState] = useState<CopyState>('idle');
   const [linkCopyState, setLinkCopyState] = useState<CopyState>('idle');
   const [shareUrl, setShareUrl] = useState('');
+  // Native share sheet: phones and some desktops. Checked after mount so the
+  // server and first client render match.
+  const [canShare, setCanShare] = useState(false);
+  const [shareState, setShareState] = useState<'idle' | 'waiting'>('idle');
+  useEffect(() => {
+    setCanShare(typeof navigator !== 'undefined' && typeof navigator.share === 'function');
+  }, []);
 
   const split = useMemo(
     () => (meal ? buildSharedSplit(meal, meal.payerId) : null),
@@ -84,6 +91,8 @@ export default function ExportShare() {
     if (settlements.length > 0) {
       text += `💸 ${settlements[0].to} paid. Settle up:\n`;
       settlements.forEach((s) => { text += `${s.from} → ${s.to}: ${money(s.amount)}\n`; });
+      if (split.pay?.venmo) text += `Venmo: @${split.pay.venmo}\n`;
+      if (split.pay?.zelle) text += `Zelle: ${split.pay.zelle}\n`;
       text += `\n`;
     }
     text += `👥 Per-Person:\n`;
@@ -133,6 +142,28 @@ export default function ExportShare() {
 
   const linkReady = Boolean(shareUrl);
 
+  const handleShare = async () => {
+    // The share sheet must open within the tap. If the link isn't ready yet,
+    // fetch it and ask for a second tap rather than failing silently.
+    if (!shareUrl) {
+      setShareState('waiting');
+      await getLink();
+      return;
+    }
+    const payer = split.payer !== undefined ? split.diners[split.payer] : undefined;
+    try {
+      await navigator.share({
+        title: split.title,
+        text: payer ? `${split.title}: ${payer.name} paid ${money(split.total)}. Here's what you owe:` : `${split.title}: here's what everyone owes.`,
+        url: shareUrl,
+      });
+    } catch {
+      // closed the sheet or sharing blocked: nothing to do
+    } finally {
+      setShareState('idle');
+    }
+  };
+
   return (
     <section className="pt-2" aria-labelledby="share-heading">
       <h2 id="share-heading" className="font-serif text-2xl font-medium tracking-tight text-folder-text">Send it to the table</h2>
@@ -146,13 +177,20 @@ export default function ExportShare() {
         </p>
       )}
 
-      <button
-        onClick={handleCopyLink}
-        aria-live="polite"
-        className={`btn-cta w-full py-4 text-base ${linkCopyState === 'error' ? '!bg-red-400' : ''}`}
-      >
-        <CopyLabel state={linkCopyState} idle="Copy link" large />
-      </button>
+      <div className="flex gap-2">
+        <button
+          onClick={handleCopyLink}
+          aria-live="polite"
+          className={`btn-cta flex-1 py-4 text-base ${linkCopyState === 'error' ? '!bg-red-400' : ''}`}
+        >
+          <CopyLabel state={linkCopyState} idle="Copy link" large />
+        </button>
+        {canShare && (
+          <button onClick={handleShare} aria-live="polite" className="btn-folder justify-center px-5 py-4 text-base">
+            {shareState === 'waiting' ? 'Tap again' : 'Share…'}
+          </button>
+        )}
+      </div>
 
       <p className={`mt-2 text-sm truncate text-center ${linkReady ? 'text-folder-muted' : 'text-folder-muted/60'}`} title={shareUrl}>
         {linkReady ? shareUrl.replace(/^https?:\/\//, '') : 'Preparing link…'}

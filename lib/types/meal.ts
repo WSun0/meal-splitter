@@ -69,6 +69,8 @@ export interface Meal {
   adjustments: Adjustment[];
   // Optional: track who paid the full bill
   payerId?: string;
+  /** Optional: how the payer wants to be paid back (shown on the share link). */
+  payerPayment?: { venmo?: string; zelle?: string };
 }
 
 export interface DinerTotal {

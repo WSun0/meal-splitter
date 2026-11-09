@@ -16,7 +16,7 @@ interface MealContextType {
   resumeDraft: () => void;
   discardDraft: () => void;
   createMeal: (title: string, restaurant?: string, date?: string) => void;
-  updateMealInfo: (updates: { title?: string; restaurant?: string; date?: string; payerId?: string | null }) => void;
+  updateMealInfo: (updates: { title?: string; restaurant?: string; date?: string; payerId?: string | null; payerPayment?: { venmo?: string; zelle?: string } | null }) => void;
   addDiner: (name: string) => void;
   removeDiner: (dinerId: string) => void;
   updateDiner: (dinerId: string, name: string) => void;
@@ -117,7 +117,7 @@ export function MealProvider({ children }: { children: ReactNode }) {
     setMeal(newMeal);
   };
 
-  const updateMealInfo = (updates: { title?: string; restaurant?: string; date?: string; payerId?: string | null }) => {
+  const updateMealInfo = (updates: { title?: string; restaurant?: string; date?: string; payerId?: string | null; payerPayment?: { venmo?: string; zelle?: string } | null }) => {
     setMeal((prevMeal) => {
       if (!prevMeal) return prevMeal;
       return {
@@ -126,6 +126,7 @@ export function MealProvider({ children }: { children: ReactNode }) {
         ...(updates.restaurant !== undefined && { restaurant: updates.restaurant }),
         ...(updates.date !== undefined && { date: updates.date }),
         ...(updates.payerId !== undefined && { payerId: updates.payerId ?? undefined }),
+        ...(updates.payerPayment !== undefined && { payerPayment: updates.payerPayment ?? undefined }),
       };
     });
   };

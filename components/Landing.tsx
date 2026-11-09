@@ -18,12 +18,15 @@ function timeAgo(ms: number): string {
   return `${hours} hr${hours === 1 ? '' : 's'} ago`;
 }
 
-// Diner order Will, Liam, Alex, Nishil, Jack: colors follow that order.
+// Sample bill. Diner order is Theo, Maya, Nora, Kenji, Sam, so colors follow it.
+const SAMPLE_TITLE = 'Friday Dinner';
+const SAMPLE_TOTAL = '$286.40';
+const SAMPLE_PAYER = 'Theo';
 const SAMPLE = [
-  { name: 'Will', amount: '$71.47', index: 0 },
-  { name: 'Nishil', amount: '$66.31', index: 3 },
-  { name: 'Alex', amount: '$62.44', index: 2 },
-  { name: 'Jack', amount: '$45.11', index: 4 },
+  { name: 'Maya', amount: '$64.20', index: 1 },
+  { name: 'Nora', amount: '$58.75', index: 2 },
+  { name: 'Kenji', amount: '$55.10', index: 3 },
+  { name: 'Sam', amount: '$49.35', index: 4 },
 ];
 
 export function Wordmark({ className = '' }: { className?: string }) {
@@ -50,11 +53,11 @@ export default function Landing({ onStart, draft, onResume, onDiscard }: Landing
         {/* What you end up with: a slip like the one friends receive */}
         <div className="paper slip-torn animate-slip px-5 pt-5 mb-8" aria-hidden>
           <div className="flex items-baseline justify-between">
-            <p className="font-serif text-xl font-medium">Turkish Dinner</p>
-            <p className="money text-lg font-semibold">$307.77</p>
+            <p className="font-serif text-xl font-medium">{SAMPLE_TITLE}</p>
+            <p className="money text-lg font-semibold">{SAMPLE_TOTAL}</p>
           </div>
           <hr className="rule-dashed my-3" />
-          <p className="text-sm text-ink-muted mb-1"><span className="font-semibold text-ink">Liam</span> paid. Settle up:</p>
+          <p className="text-sm text-ink-muted mb-1"><span className="font-semibold text-ink">{SAMPLE_PAYER}</span> paid. Settle up:</p>
           <ul>
             {SAMPLE.map((row) => (
               <li key={row.name} className="flex items-center justify-between py-1.5 text-[15px]">

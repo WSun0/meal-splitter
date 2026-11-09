@@ -4,6 +4,8 @@ import { useMeal } from '@/lib/store/meal-store';
 import { generateMealSummary, calculateComputedTotal, getUnassignedItems, calculateTotalAdjustments } from '@/lib/utils/calculations';
 import { formatCurrency, formatDate } from '@/lib/utils/helpers';
 import PersonAvatar from '@/components/ui/PersonAvatar';
+import { useState } from 'react';
+import { normalizeVenmo, normalizeZelle, recallPayment, rememberPayment } from '@/lib/utils/payment';
 
 export default function MealSummary() {
   const { meal, updateMealInfo } = useMeal();
@@ -85,7 +87,9 @@ export default function MealSummary() {
                   key={d.id}
                   role="radio"
                   aria-checked={on}
-                  onClick={() => updateMealInfo({ payerId: on ? null : d.id })}
+                  onClick={() =>
+                    updateMealInfo(on ? { payerId: null, payerPayment: null } : { payerId: d.id, payerPayment: recallPayment(d.name) ?? null })
+                  }
                   className={`flex items-center gap-1.5 pl-1 pr-3 py-1 rounded-full border-[1.5px] text-sm font-medium transition-colors ${
                     on ? 'bg-ink text-paper border-ink' : 'border-rule text-ink hover:border-stone-400'
                   }`}
@@ -98,6 +102,8 @@ export default function MealSummary() {
           </div>
         </div>
       )}
+
+      {payer && <PayDetails payerName={payer.name} />}
 
       {/* Who owes what */}
       <p className="text-sm text-ink-muted mt-5 mb-1">
@@ -146,6 +152,68 @@ export default function MealSummary() {
           ? 'Everyone’s shares add up exactly to the total.'
           : `Shares differ from the total by ${formatCurrency(Math.abs(sharesSum - computedTotal))} because of rounding.`}
       </p>
+    </div>
+  );
+}
+
+/** Optional Venmo / Zelle details for the payer, shown on the share link. */
+function PayDetails({ payerName }: { payerName: string }) {
+  const { meal, updateMealInfo } = useMeal();
+  const [touched, setTouched] = useState({ venmo: false, zelle: false });
+  const pay = meal?.payerPayment ?? {};
+  const venmoBad = touched.venmo && !!pay.venmo?.trim() && !normalizeVenmo(pay.venmo);
+  const zelleBad = touched.zelle && !!pay.zelle?.trim() && !normalizeZelle(pay.zelle);
+
+  const update = (field: 'venmo' | 'zelle', value: string) => {
+    const next = { ...pay, [field]: value };
+    updateMealInfo({ payerPayment: next });
+    rememberPayment(payerName, next);
+  };
+
+  return (
+    <div className="mt-4 rounded-lg bg-paper-shade p-3.5">
+      <p className="text-sm font-semibold text-ink">How should people pay {payerName}? <span className="font-normal text-ink-muted">Optional</span></p>
+      <div className="grid sm:grid-cols-2 gap-2 mt-2.5">
+        <div>
+          <label htmlFor="pay-venmo" className="block text-xs font-medium text-ink-muted mb-1">Venmo username</label>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 pointer-events-none">@</span>
+            <input
+              id="pay-venmo"
+              type="text"
+              autoComplete="off"
+              autoCapitalize="none"
+              spellCheck={false}
+              value={pay.venmo ?? ''}
+              onChange={(e) => update('venmo', e.target.value.replace(/^\s*@+/, ''))}
+              onBlur={() => setTouched((t) => ({ ...t, venmo: true }))}
+              aria-invalid={venmoBad}
+              placeholder="username"
+              className="input input-prefixed bg-white py-2"
+            />
+          </div>
+          {venmoBad && <p className="text-xs text-[#b8432b] mt-1">Letters, numbers, - and _ only</p>}
+        </div>
+        <div>
+          <label htmlFor="pay-zelle" className="block text-xs font-medium text-ink-muted mb-1">Zelle phone or email</label>
+          <input
+            id="pay-zelle"
+            type="text"
+            inputMode="email"
+            autoComplete="off"
+            autoCapitalize="none"
+            spellCheck={false}
+            value={pay.zelle ?? ''}
+            onChange={(e) => update('zelle', e.target.value)}
+            onBlur={() => setTouched((t) => ({ ...t, zelle: true }))}
+            aria-invalid={zelleBad}
+            placeholder="(555) 123-4567"
+            className="input bg-white py-2"
+          />
+          {zelleBad && <p className="text-xs text-[#b8432b] mt-1">Enter a 10-digit US number or an email</p>}
+        </div>
+      </div>
+      <p className="text-xs text-ink-muted mt-2">Anyone with the link will see these. Remembered on this device for {payerName}.</p>
     </div>
   );
 }

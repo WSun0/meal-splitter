@@ -5,6 +5,7 @@ import { SharedSplit, SharedDiner, dinerItemLines } from '@/lib/utils/share';
 import { formatCurrency, formatDate } from '@/lib/utils/helpers';
 import PersonAvatar from '@/components/ui/PersonAvatar';
 import { Wordmark } from '@/components/Landing';
+import { PayerPayment, venmoPayUrl } from '@/lib/utils/payment';
 
 const money = (cents: number) => formatCurrency(cents / 100);
 
@@ -99,7 +100,20 @@ export default function SharedSplitView({ split }: { split: SharedSplit }) {
                 {d.name}
                 {payer && <span className="text-ink-muted font-normal text-sm"> to {payer.name}</span>}
               </span>
-              <span className="money text-lg font-medium text-ink">{money(d.total)}</span>
+              <span className="flex flex-col items-end">
+                <span className="money text-lg font-medium text-ink">{money(d.total)}</span>
+                {payer && split.pay?.venmo && (
+                  <a
+                    href={venmoPayUrl(split.pay.venmo, d.total, split.title)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs font-semibold text-[#2a6fd6] hover:underline"
+                    aria-label={`Pay ${money(d.total)} to ${payer.name} on Venmo`}
+                  >
+                    Pay on Venmo
+                  </a>
+                )}
+              </span>
             </li>
           ))}
         </ul>
@@ -108,6 +122,7 @@ export default function SharedSplitView({ split }: { split: SharedSplit }) {
             {payer.name}&apos;s own share was {money(payer.total)}.
           </p>
         )}
+        {payer && split.pay && <PayPayer name={payer.name} pay={split.pay} />}
       </article>
 
       {/* Full breakdown: folds out of the folder */}
@@ -149,6 +164,45 @@ export default function SharedSplitView({ split }: { split: SharedSplit }) {
         <a href="/" className="btn-cta">Split your own bill</a>
       </div>
     </SharedShell>
+  );
+}
+
+/** The payer's Venmo / Zelle details, with a copy button for each. */
+function PayPayer({ name, pay }: { name: string; pay: PayerPayment }) {
+  return (
+    <div className="mt-4 rounded-lg bg-paper-shade px-3.5 py-3">
+      <p className="text-sm font-semibold text-ink mb-1.5">Pay {name}</p>
+      <dl className="space-y-1.5 text-sm">
+        {pay.venmo && <CopyRow label="Venmo" value={`@${pay.venmo}`} copyValue={pay.venmo} />}
+        {pay.zelle && <CopyRow label="Zelle" value={pay.zelle} />}
+      </dl>
+    </div>
+  );
+}
+
+function CopyRow({ label, value, copyValue }: { label: string; value: string; copyValue?: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="flex items-center gap-3">
+      <dt className="w-12 shrink-0 text-ink-muted">{label}</dt>
+      <dd className="flex-1 min-w-0 font-medium text-ink truncate select-all">{value}</dd>
+      <button
+        type="button"
+        onClick={async () => {
+          try {
+            await navigator.clipboard.writeText(copyValue ?? value);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1500);
+          } catch {
+            // clipboard blocked: the value is selectable as a fallback
+          }
+        }}
+        className="text-xs font-semibold text-ink-muted hover:text-ink px-2 py-1 rounded-md hover:bg-white"
+        aria-label={`Copy ${label} ${value}`}
+      >
+        {copied ? 'Copied' : 'Copy'}
+      </button>
+    </div>
   );
 }
 

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { Meal } from '../types/meal';
 import { generateMealSummary, calculateItemShareForDiner } from './calculations';
+import { PayerPayment, cleanPayment } from './payment';
 
 /*
  * Shared split data.
@@ -45,6 +46,7 @@ export interface SharedSplit {
   payer?: number; // index into diners
   diners: SharedDiner[];
   items: SharedItem[]; // empty for legacy links
+  pay?: PayerPayment; // how to pay the payer, if they added it
 }
 
 export interface Settlement {
@@ -125,6 +127,7 @@ export function buildSharedSplit(meal: Meal, payerId?: string): SharedSplit {
     payer: payerIdx,
     diners,
     items,
+    ...(payerIdx !== undefined && cleanPayment(meal.payerPayment) && { pay: cleanPayment(meal.payerPayment) }),
   };
 }
 
@@ -143,6 +146,7 @@ export function getSettlements(split: SharedSplit): Settlement[] {
 // [2, title, restaurant, date, total, payer, diners, items]
 //   diner: [name, items, tax, tip, other, total]
 //   item:  [name, amount, [dinerIdx, cents, dinerIdx, cents, ...], quantity?]
+//   pay?:  [venmoUsername, zellePhoneOrEmail]  (only when the payer added them)
 //          (quantity omitted when 1; links made before it existed have none)
 // ---------------------------------------------------------------------------
 
@@ -166,12 +170,15 @@ export const WireSchema = z.tuple([
   z.number().int().min(-1).max(49),
   z.array(WireDiner).min(1).max(50),
   z.array(WireItem).max(200),
+  // [venmo, zelle], either may be ''. Omitted when there are no pay details.
+  z.tuple([z.string().max(30), z.string().max(254)]).optional(),
 ]);
 
 export type Wire = z.infer<typeof WireSchema>;
 
 export function toWire(split: SharedSplit): Wire {
-  return [
+  const pay = split.payer !== undefined ? cleanPayment(split.pay) : undefined;
+  const wire: Wire = [
     2,
     split.title,
     split.restaurant ?? '',
@@ -184,13 +191,16 @@ export function toWire(split: SharedSplit): Wire {
       return it.quantity > 1 ? [it.name, it.amount, flat, it.quantity] : [it.name, it.amount, flat];
     }),
   ];
+  if (pay) wire.push([pay.venmo ?? '', pay.zelle ?? '']);
+  return wire;
 }
 
 export function fromWire(input: unknown): SharedSplit | null {
   const parsed = WireSchema.safeParse(input);
   if (!parsed.success) return null;
-  const [, title, restaurant, date, total, payer, diners, items] = parsed.data;
+  const [, title, restaurant, date, total, payer, diners, items, payTuple] = parsed.data;
   if (payer >= diners.length) return null;
+  const pay = payer >= 0 && payTuple ? cleanPayment({ venmo: payTuple[0], zelle: payTuple[1] }) : undefined;
 
   const sharedItems: SharedItem[] = [];
   for (const [itemName, amount, flat, quantity] of items) {
@@ -211,6 +221,7 @@ export function fromWire(input: unknown): SharedSplit | null {
     payer: payer >= 0 ? payer : undefined,
     diners: diners.map(([n, it, tax, tip, other, t]) => ({ name: n, items: it, tax, tip, other, total: t })),
     items: sharedItems,
+    ...(pay && { pay }),
   };
 }
 
@@ -423,8 +434,8 @@ function joinNames(names: string[]): string {
 /**
  * What one person had, phrased the way you'd explain it at the table:
  *   - "1 of 4 · $179.80 ÷ 4 = $44.95 each"  multi-quantity item, they had whole units
- *   - "Split 3 ways with Liam & Alex · $9.00 total"  one dish shared evenly
- *   - "Shared with Nishil · $14.00 total"  shared unevenly
+ *   - "Split 3 ways with Maya & Nora · $9.00 total"  one dish shared evenly
+ *   - "Shared with Kenji · $14.00 total"  shared unevenly
  * Whole units are detected from the amounts, so "4 people split 4 menus evenly"
  * and "everyone got their own menu" both read as "1 of 4" (they cost the same).
  */
