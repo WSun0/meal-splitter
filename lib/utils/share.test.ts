@@ -163,3 +163,20 @@ describe('dinerItemLines', () => {
     expect(fromWire(JSON.parse(JSON.stringify(toWire(split))))!.items[0].quantity).toBe(3);
   });
 });
+
+describe('decodeFragment hardening', () => {
+  it('stops inflating a decompression bomb instead of expanding it', async () => {
+    const raw = new Uint8Array(50 * 1024 * 1024); // 50 MB of zeros, ~50 KB compressed
+    const stream = new Blob([raw]).stream().pipeThrough(new CompressionStream('deflate-raw'));
+    const compressed = new Uint8Array(await new Response(stream).arrayBuffer());
+    const fragment = 'z' + Buffer.from(compressed).toString('base64url');
+    const before = process.memoryUsage().arrayBuffers;
+    expect(await decodeFragment(fragment)).toBeNull();
+    // Old code buffered the full 50 MB before checking; now it stops at the cap.
+    expect(process.memoryUsage().arrayBuffers - before).toBeLessThan(20 * 1024 * 1024);
+  });
+
+  it('rejects absurdly long fragments up front', async () => {
+    expect(await decodeFragment('z' + 'A'.repeat(200_000))).toBeNull();
+  });
+});

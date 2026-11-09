@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { generateId, formatCurrency, formatDate, safeJsonParse } from './helpers';
+import { generateId, formatCurrency, formatDate, safeJsonParse, csvCell } from './helpers';
 
 describe('generateId', () => {
   it('returns a string', () => {
@@ -138,5 +138,24 @@ describe('safeJsonParse', () => {
     };
     const json = JSON.stringify(complex);
     expect(safeJsonParse(json, null)).toEqual(complex);
+  });
+});
+
+describe('csvCell', () => {
+  it('quotes and doubles embedded quotes', () => {
+    expect(csvCell('Will "W" Sun')).toBe('"Will ""W"" Sun"');
+  });
+
+  it('neutralises formulas', () => {
+    expect(csvCell('=SUM(A1:A2)')).toBe(`"'=SUM(A1:A2)"`);
+    expect(csvCell('@cmd')).toBe(`"'@cmd"`);
+  });
+
+  it('cannot be broken out of with quotes on the formula path', () => {
+    // Previously produced "'-x","=cmd|' /C calc'!A0" -> second, unquoted formula cell.
+    const cell = csvCell(`-x","=cmd|' /C calc'!A0`);
+    expect(cell).toBe(`"'-x"",""=cmd|' /C calc'!A0"`);
+    // Exactly one cell: no unescaped quote inside the wrapper.
+    expect(cell.slice(1, -1).replace(/""/g, '')).not.toContain('"');
   });
 });

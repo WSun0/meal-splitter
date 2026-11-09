@@ -5,6 +5,7 @@ import { generateMealSummary, getUnassignedItems } from '@/lib/utils/calculation
 import { formatCurrency, formatDate } from '@/lib/utils/helpers';
 import { buildSharedSplit, createShareLink, getSettlements, toWire } from '@/lib/utils/share';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { csvCell } from '@/lib/utils/helpers';
 
 type CopyState = 'idle' | 'generating' | 'copied' | 'error';
 
@@ -113,20 +114,11 @@ export default function ExportShare() {
   const handleCopyToClipboard = () => runCopy(setCopyState, getLink().then(generateTextSummary));
   const handleCopyLink = () => runCopy(setLinkCopyState, getLink());
 
-  // Sanitize string for CSV to prevent formula injection
-  const sanitizeForCSV = (value: string): string => {
-    // If the value starts with characters that could be interpreted as formulas, prefix with a single quote
-    if (/^[=+\-@\t\r]/.test(value)) {
-      return `'${value}`;
-    }
-    // Escape double quotes by doubling them
-    return value.replace(/"/g, '""');
-  };
 
   const handleDownloadCSV = () => {
     let csv = 'Diner,Items,Tax,Tip,Fees,Discounts,Adjustments,Total\n';
     summary.dinerTotals.forEach((dt) => {
-      csv += `"${sanitizeForCSV(dt.dinerName)}",${dt.itemSubtotal.toFixed(2)},${dt.allocatedTax.toFixed(2)},${dt.allocatedTip.toFixed(2)},${dt.allocatedFees.toFixed(2)},${dt.allocatedDiscounts.toFixed(2)},${dt.adjustments.toFixed(2)},${dt.total.toFixed(2)}\n`;
+      csv += `${csvCell(dt.dinerName)},${dt.itemSubtotal.toFixed(2)},${dt.allocatedTax.toFixed(2)},${dt.allocatedTip.toFixed(2)},${dt.allocatedFees.toFixed(2)},${dt.allocatedDiscounts.toFixed(2)},${dt.adjustments.toFixed(2)},${dt.total.toFixed(2)}\n`;
     });
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);

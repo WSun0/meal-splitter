@@ -182,6 +182,20 @@ BLOB_READ_WRITE_TOKEN=your_blob_token
 
 ---
 
+## Security
+
+No accounts: meal data stays in the browser until it's shared. Share links are capability URLs (anyone with the link can read that split).
+
+- **`POST /api/share`**: request bodies are capped at 32 KB, validated with zod, and stored under a server-computed hash, so a share can't be overwritten with different content. Cross-site browser requests are rejected (`Sec-Fetch-Site`/`Origin`). Each IP gets 30 writes per 10 minutes, per server instance.
+- **`/s/[id]`**: ids are validated before storage is touched, and successful reads are cached so repeat views don't spend Blob operations. Pages carry `X-Robots-Tag: noindex`.
+- **`/split#…`**: compressed payloads are inflated with a 64 KB cap (no decompression bombs).
+- **Headers** (all routes, `next.config.js`): CSP, `frame-ancestors 'none'`, `X-Frame-Options`, `nosniff`, `Referrer-Policy`, `Permissions-Policy`, HSTS. `X-Powered-By` is disabled. `script-src` allows `'unsafe-inline'` because Next's bootstrap scripts are inline (nonces would force fully dynamic rendering).
+- **CSV export** quotes every cell and neutralizes formula prefixes.
+
+**Recommended in Vercel:** add a Firewall rate-limit rule for `POST /api/share` (e.g. 60 requests / 10 min per IP). The in-app limiter is per serverless instance, so the Firewall rule is the durable backstop.
+
+---
+
 ## Limitations
 
 - **No cloud sync** - data is browser-local (localStorage only)
