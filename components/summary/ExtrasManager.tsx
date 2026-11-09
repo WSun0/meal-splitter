@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useMeal } from '@/lib/store/meal-store';
 import { AdjustmentScope, AllocationRule, AdjustmentType } from '@/lib/types/meal';
 import { formatCurrency } from '@/lib/utils/helpers';
@@ -92,6 +92,7 @@ export default function ExtrasManager() {
               {meal.receiptMeta.tip > 0 && !tipPercents.some((p) => Math.abs(currentTipPct - p) < 0.05) && (
                 <span className="text-sm text-ink-muted self-center pl-1">{currentTipPct.toFixed(1)}% of items</span>
               )}
+              <TipInfo subtotal={itemsSubtotal} tax={meal.receiptMeta.tax} tip={meal.receiptMeta.tip} />
             </div>
           )}
         </div>
@@ -233,6 +234,81 @@ function MoneyRow({ id, label, value, onChange, bare }: {
           className="input input-prefixed money text-right py-2"
         />
       </div>
+    </div>
+  );
+}
+
+/**
+ * Explains that the % buttons are on the pre-tax amount. Some restaurants
+ * suggest tips on the post-tax total, which makes "20%" on the receipt a
+ * bigger number. Opens on tap (not hover) so it works on phones.
+ */
+function TipInfo({ subtotal, tax, tip }: { subtotal: number; tax: number; tip: number }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const id = useId();
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    document.addEventListener('pointerdown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  const showNumbers = tip > 0 && tax > 0 && subtotal > 0;
+  const before = (tip / subtotal) * 100;
+  const after = (tip / (subtotal + tax)) * 100;
+
+  return (
+    <div ref={ref} className="relative self-center ml-auto">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        aria-controls={id}
+        aria-label="How tip percentages are worked out"
+        className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${
+          open ? 'bg-ink text-paper' : 'text-ink-muted hover:text-ink hover:bg-paper-shade'
+        }`}
+      >
+        <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+          <circle cx="12" cy="12" r="9" strokeWidth={1.75} />
+          <path strokeLinecap="round" strokeWidth={2} d="M12 11v5" />
+          <circle cx="12" cy="7.75" r="1.1" fill="currentColor" stroke="none" />
+        </svg>
+      </button>
+      {open && (
+        <div
+          id={id}
+          role="note"
+          className="absolute right-0 bottom-full mb-2.5 w-72 max-w-[calc(100vw-2.5rem)] z-20 rounded-lg bg-ink text-paper text-sm leading-snug p-3.5 shadow-lg"
+        >
+          <p>
+            Some restaurants work out the tip <span className="font-semibold">after tax</span>, which quietly makes it bigger.
+          </p>
+          <p className="mt-2 text-paper/80">
+            These buttons use the total <span className="font-semibold text-paper">before tax</span>, so a 20% tip here can look a little different from the 20% printed on your receipt.
+          </p>
+          {showNumbers && (
+            <p className="mt-2.5 pt-2.5 border-t border-white/15 text-paper/80">
+              Your tip is <span className="money text-paper">{before.toFixed(1)}%</span> before tax, or{' '}
+              <span className="money text-paper">{after.toFixed(1)}%</span> after tax.
+            </p>
+          )}
+          {/* the little triangle, pointing at the ⓘ button */}
+          <span
+            aria-hidden
+            className="absolute -bottom-1.5 right-2 w-3 h-3 rotate-45 bg-ink"
+          />
+        </div>
+      )}
     </div>
   );
 }
